@@ -72,10 +72,10 @@ func New(
 		Timeout: time.Minute,
 	}
 
-	// By convention CT log public keys are shared/configured as the base64
-	// encoded PEM content of the key _without_ the PEM object type header/footer.
-	// The `ctclient.New()` constructor expects a vanilla PEM block that includes
-	// the header/footer so we manufacture that here with the b64key
+	// By convention CT log public keys are shared/configured in base64 encoded
+	// DER. The `ctclient.New()` constructor expects a vanilla PEM block, that is,
+	// base64 encoded DER surronded by a header/footer. We manufacture such
+	// a block here using the b64key
 	pubkey := fmt.Sprintf("-----BEGIN PUBLIC KEY-----\n%s\n-----END PUBLIC KEY-----", b64key)
 
 	// Create a CT client for the log. We pass a PublicKey in the
