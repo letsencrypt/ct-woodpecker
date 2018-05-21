@@ -90,7 +90,7 @@ func (c *config) Valid() error {
 	return nil
 }
 
-// Load unmarhshals the JSON contents stored in the file path provided,
+// Load unmarshals the JSON contents stored in the file path provided,
 // populating the configuration object. An error is returned if the populated
 // configuration is not valid.
 func (c *config) Load(file string) error {
