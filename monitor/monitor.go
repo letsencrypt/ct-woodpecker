@@ -18,6 +18,7 @@ import (
 // will export/track.
 type monitorStats struct {
 	sthTimestamp *prometheus.GaugeVec
+	sthAge       *prometheus.GaugeVec
 	sthFailures  *prometheus.CounterVec
 	sthLatency   *prometheus.HistogramVec
 }
@@ -35,6 +36,10 @@ var (
 		sthTimestamp: promauto.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "sth_timestamp",
 			Help: "Timestamp of observed CT log signed tree head (STH)",
+		}, []string{"uri"}),
+		sthAge: promauto.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "sth_age",
+			Help: "Elapsed time since observed CT log signed tree head (STH) timestamp",
 		}, []string{"uri"}),
 		sthFailures: promauto.NewCounterVec(prometheus.CounterOpts{
 			Name: "sth_failures",
@@ -102,9 +107,11 @@ func New(
 }
 
 // observeSTH fetches the monitored log's signed tree head (STH). The latency of
-// this operation is published to the `sthLatency` metric. If an error occurs
-// the `sthFailures` metric will be incremented. If the operation succeeds then
-// the `sthTimestamp` gauge will be updated to the returned STH's timestamp.
+// this operation is published to the `sthLatency` metric. The clocktime elapsed
+// since the STH's timestamp is published to the `sthAge` metric. If an error
+// occurs the `sthFailures` metric will be incremented. If the operation
+// succeeds then the `sthTimestamp` gauge will be updated to the returned STH's
+// timestamp.
 func (m *Monitor) observeSTH() {
 	labels := prometheus.Labels{"uri": m.logURI}
 	m.logger.Printf("Fetching STH for %q\n", m.logURI)
@@ -123,7 +130,10 @@ func (m *Monitor) observeSTH() {
 
 	m.stats.sthTimestamp.With(labels).Set(float64(sth.Timestamp))
 	ts := time.Unix(0, int64(sth.Timestamp)*int64(time.Millisecond))
-	m.logger.Printf("STH for %q verified. Timestamp: %s\n", m.logURI, ts)
+	sthAge := m.clk.Since(ts)
+	m.stats.sthAge.With(labels).Set(sthAge.Seconds())
+
+	m.logger.Printf("STH for %q verified. Timestamp: %s Age: %s\n", m.logURI, ts, sthAge)
 }
 
 // Run starts the log monitoring process by creating a Go routine that will loop
