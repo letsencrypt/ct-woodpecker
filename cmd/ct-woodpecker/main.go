@@ -111,10 +111,10 @@ func (c *config) Load(file string) error {
 	return c.Valid()
 }
 
-// catchSignals blocks forever waiting for SIGTERM, SIGINT or SIGHUP to arrive
+// waitForSignal blocks forever waiting for SIGTERM, SIGINT or SIGHUP to arrive
 // from the OS. When one of these signals occurs the provided callback is run
 // and the program exits.
-func catchSignals(callback func()) {
+func waitForSignal(callback func()) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM)
 	signal.Notify(sigChan, syscall.SIGINT)
@@ -178,9 +178,9 @@ func main() {
 	}
 
 	// Block the main goroutine waiting for signals while the monitors run in
-	// their own goroutines. catchSignals is provided a callback to cleanly
+	// their own goroutines. waitForSignal is provided a callback to cleanly
 	// shutdown the metrics HTTP server when a signal is caught.
-	catchSignals(func() {
+	waitForSignal(func() {
 		err := statsServer.Shutdown(context.Background())
 		if err != nil {
 			logger.Printf("Unable to shutdown statsServer cleanly: %s\n",
