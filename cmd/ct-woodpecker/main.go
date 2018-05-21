@@ -20,13 +20,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const (
-	// default -config value
-	configDefault = "test/config.json"
-	// default metrics listen host address
-	metricsDefault = ":1971"
-)
-
 var (
 	clk    clock.Clock = clock.Default()
 	logger *log.Logger = log.New(
@@ -83,7 +76,7 @@ func (c *config) Valid() error {
 		return err
 	}
 	if c.MetricsAddr == "" {
-		c.MetricsAddr = metricsDefault
+		c.MetricsAddr = ":1971"
 	}
 	if len(c.Logs) < 1 {
 		return fmt.Errorf("At least one log must be configured")
@@ -159,7 +152,7 @@ func initMetrics(addr string) *http.Server {
 func main() {
 	configFile := flag.String(
 		"config",
-		configDefault,
+		"test/config.json",
 		"JSON ct-woodpekcer configuration file path")
 	flag.Parse()
 
