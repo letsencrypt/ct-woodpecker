@@ -123,9 +123,7 @@ func catchSignals(callback func()) {
 	// Block waiting for a signal to arrive
 	sig := <-sigChan
 	logger.Printf("Caught %s signal\n", sig.String())
-	if callback != nil {
-		callback()
-	}
+	callback()
 	logger.Printf("Goodbye\n")
 	os.Exit(0)
 }
