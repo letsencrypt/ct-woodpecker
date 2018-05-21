@@ -33,11 +33,6 @@ var (
 		os.Stdout,
 		path.Base(os.Args[0])+" ",
 		log.LstdFlags)
-	signalToName map[os.Signal]string = map[os.Signal]string{
-		syscall.SIGTERM: "SIGTERM",
-		syscall.SIGINT:  "SIGINT",
-		syscall.SIGHUP:  "SIGHUP",
-	}
 )
 
 // failOnError aborts by calling log.Fatalf with the provided msg iff the err is
@@ -133,7 +128,7 @@ func catchSignals(callback func()) {
 
 	// Block waiting for a signal to arrive
 	sig := <-sigChan
-	logger.Printf("Caught %s\n", signalToName[sig])
+	logger.Printf("Caught %s signal\n", sig.String())
 	if callback != nil {
 		callback()
 	}
