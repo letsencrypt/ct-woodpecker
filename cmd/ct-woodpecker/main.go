@@ -142,7 +142,7 @@ func initMetrics(addr string) *http.Server {
 	go func() {
 		err := statsServer.ListenAndServe()
 		if err != nil {
-			log.Printf("stats-server : %s", err.Error())
+			log.Println(err.Error())
 		}
 	}()
 	return statsServer
