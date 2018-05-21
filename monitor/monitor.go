@@ -117,7 +117,8 @@ func (m *Monitor) observeSTH() {
 	m.logger.Printf("Fetching STH for %q\n", m.logURI)
 
 	start := m.clk.Now()
-	ctx, _ := context.WithTimeout(context.Background(), sthTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), sthTimeout)
+	defer cancel()
 	sth, err := m.client.GetSTH(ctx)
 	elapsed := m.clk.Since(start)
 	m.stats.sthLatency.With(labels).Observe(elapsed.Seconds())
