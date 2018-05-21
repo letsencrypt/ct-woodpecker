@@ -136,7 +136,7 @@ func (m *Monitor) observeSTH() {
 	m.logger.Printf("STH for %q verified. Timestamp: %s Age: %s\n", m.logURI, ts, sthAge)
 }
 
-// Run starts the log monitoring process by creating a Go routine that will loop
+// Run starts the log monitoring process by creating a goroutine that will loop
 // forever fetching the log's STH and then sleeping.
 func (m *Monitor) Run() {
 	go func() {

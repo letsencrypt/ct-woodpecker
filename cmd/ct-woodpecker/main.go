@@ -130,7 +130,7 @@ func catchSignals(callback func()) {
 
 // initMetrics creates a HTTP server listening on the provided addr with
 // a Prometheus handler registered for the /metrics URL path. The server is
-// started on a dedicated Go routine before returning to the caller.
+// started on a dedicated goroutine before returning to the caller.
 func initMetrics(addr string) *http.Server {
 	// Create an HTTP server for Prometheus metrics to be served from.
 	statsServer := &http.Server{
@@ -138,7 +138,7 @@ func initMetrics(addr string) *http.Server {
 	}
 	http.Handle("/metrics", promhttp.Handler())
 	logger.Printf("Handling /metrics on %s\n", addr)
-	// Run the HTTP server in its own Go routine
+	// Run the HTTP server in its own goroutine
 	go func() {
 		err := statsServer.ListenAndServe()
 		if err != nil {
@@ -177,8 +177,8 @@ func main() {
 		m.Run()
 	}
 
-	// Block the main Go routine waiting for signals while the monitors run in
-	// their own Go routines. catchSignals is provided a callback to cleanly
+	// Block the main goroutine waiting for signals while the monitors run in
+	// their own goroutines. catchSignals is provided a callback to cleanly
 	// shutdown the metrics HTTP server when a signal is caught.
 	catchSignals(func() {
 		err := statsServer.Shutdown(context.Background())
