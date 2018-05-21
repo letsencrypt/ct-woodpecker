@@ -55,9 +55,7 @@ type Monitor struct {
 	stats  *monitorStats
 	logURI string
 	logKey string
-	// We use the read-only CheckLogClient interface here because the monitor
-	// never writes to the log and it allows easier mocking
-	client ctClient.CheckLogClient
+	client *ctClient.LogClient
 	// How long to sleep between fetching the log's current STH
 	sthFetchInterval time.Duration
 }
