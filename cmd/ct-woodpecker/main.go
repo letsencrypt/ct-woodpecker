@@ -29,15 +29,6 @@ var (
 		log.LstdFlags)
 )
 
-// failOnError aborts by calling log.Fatalf with the provided msg iff the err is
-// not nil.
-func failOnError(err error, msg string) {
-	if err == nil {
-		return
-	}
-	log.Fatalf("%s - %s", msg, err)
-}
-
 // config is a struct holding the command line configuration data
 type config struct {
 	STHFetchInterval string
@@ -157,23 +148,29 @@ func main() {
 
 	// Load and validate the configuration from the provided JSON
 	var conf config
-	err := conf.Load(*configFile)
-	failOnError(err, "Unable to load ct-woodpecker config")
+	if err := conf.Load(*configFile); err != nil {
+		log.Fatalf("Unable to load ct-woodpecker config: %s", err)
+	}
 
 	// Set up the Prometheus metrics HTTP server
 	statsServer := initMetrics(conf.MetricsAddr)
 
 	// Create and start monitors to do the work of monitoring the provided log
 	fetchInterval, err := time.ParseDuration(conf.STHFetchInterval)
-	failOnError(err, "Configured STH Fetch Interval is invalid")
-	for _, log := range conf.Logs {
+	if err != nil {
+		log.Fatalf("Configured STH Fetch Interval is invalid: %s", err.Error())
+	}
+	for _, logConf := range conf.Logs {
 		m, err := monitor.New(
-			log.URI,
-			log.Key,
+			logConf.URI,
+			logConf.Key,
 			fetchInterval,
 			logger,
 			clk)
-		failOnError(err, fmt.Sprintf("Unable to create monitor for log %q", log.URI))
+		if err != nil {
+			log.Fatalf("Unable to create monitor for log %q: %s",
+				logConf.URI, err.Error())
+		}
 		m.Run()
 	}
 
