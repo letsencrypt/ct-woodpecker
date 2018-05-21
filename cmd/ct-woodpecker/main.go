@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -54,7 +55,7 @@ type logConfig struct {
 // URI, or no Key configured then an error is returned.
 func (lc logConfig) Valid() error {
 	if lc.URI == "" {
-		return fmt.Errorf("log URI must not be empty")
+		return errors.New("log URI must not be empty")
 	}
 	if url, err := url.Parse(lc.URI); err != nil {
 		return fmt.Errorf("log URI %q is invalid: %s", lc.URI, err.Error())
@@ -62,7 +63,7 @@ func (lc logConfig) Valid() error {
 		return fmt.Errorf("log URI %q is invalid: protocol scheme must be http:// or https://", lc.URI)
 	}
 	if lc.Key == "" {
-		return fmt.Errorf("log Key must not be empty")
+		return errors.New("log Key must not be empty")
 	}
 	return nil
 }
@@ -79,7 +80,7 @@ func (c *config) Valid() error {
 		c.MetricsAddr = ":1971"
 	}
 	if len(c.Logs) < 1 {
-		return fmt.Errorf("At least one log must be configured")
+		return errors.New("At least one log must be configured")
 	}
 	for _, lc := range c.Logs {
 		if err := lc.Valid(); err != nil {
@@ -94,7 +95,7 @@ func (c *config) Valid() error {
 // configuration is not valid.
 func (c *config) Load(file string) error {
 	if file == "" {
-		return fmt.Errorf("Config file path must not be empty")
+		return errors.New("Config file path must not be empty")
 	}
 
 	configBytes, err := ioutil.ReadFile(file)
