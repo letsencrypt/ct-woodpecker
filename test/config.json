@@ -1,0 +1,10 @@
+{
+  "sthFetchInterval": "120s",
+  "metricsAddr": ":1971",
+  "logs": [
+    {
+      "uri": "https://birch.ct.letsencrypt.org/2018",
+      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g=="
+    }
+  ]
+}
