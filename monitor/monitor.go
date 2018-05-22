@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	ct "github.com/google/certificate-transparency-go"
 	ctClient "github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
 	"github.com/jmhodges/clock"
@@ -53,6 +54,13 @@ var (
 	}
 )
 
+// monitorCTClient is an interface that specifies the ctClient.LogClient
+// functions that the monitor package uses. This interface allows for easy
+// shimming of client methods with mock implementations for unit testing.
+type monitorCTClient interface {
+	GetSTH(context.Context) (*ct.SignedTreeHead, error)
+}
+
 // Monitor is a struct for monitoring a CT log.
 type Monitor struct {
 	logger *log.Logger
@@ -60,7 +68,7 @@ type Monitor struct {
 	stats  *monitorStats
 	logURI string
 	logKey string
-	client *ctClient.LogClient
+	client monitorCTClient
 	// How long to sleep between fetching the log's current STH
 	sthFetchInterval time.Duration
 }
@@ -144,7 +152,7 @@ func (m *Monitor) Run() {
 		for {
 			m.observeSTH()
 			m.logger.Printf("Sleeping for %s\n", m.sthFetchInterval)
-			time.Sleep(m.sthFetchInterval)
+			m.clk.Sleep(m.sthFetchInterval)
 		}
 	}()
 }
