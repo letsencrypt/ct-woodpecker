@@ -68,12 +68,12 @@ func TestNew(t *testing.T) {
 	}
 }
 
-// flakyClient is a type implementing the monitorCTClient interface with
+// errorClient is a type implementing the monitorCTClient interface with
 // a `GetSTH` function that always returns an error.
-type flakyClient struct{}
+type errorClient struct{}
 
 // GetSTH mocked to always return an error
-func (c flakyClient) GetSTH(_ context.Context) (*ct.SignedTreeHead, error) {
+func (c errorClient) GetSTH(_ context.Context) (*ct.SignedTreeHead, error) {
 	return nil, errors.New("ct-log logged off")
 }
 
@@ -105,7 +105,7 @@ func TestObserveSTH(t *testing.T) {
 	}
 
 	// Replace the monitor's client with one that always fails
-	m.client = flakyClient{}
+	m.client = errorClient{}
 	// Make an STH observation
 	m.observeSTH()
 
