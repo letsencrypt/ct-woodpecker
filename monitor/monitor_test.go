@@ -37,11 +37,9 @@ func TestNew(t *testing.T) {
 	// Creating a monitor with vaild configuration should not fail
 	m, err := New(logURI, logKey, fetchDuration, l, clk)
 	if err != nil {
-		// NOTE: Using fatalf to avoid later nil pointer panics
 		t.Fatalf("Expected no error calling New(), got %s", err.Error())
 	}
 	if m == nil {
-		// NOTE: Using fatalf to avoid later nil pointer panics
 		t.Fatalf("Expected a non-nil monitor from New() when err == nil")
 	}
 
