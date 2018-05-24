@@ -1,7 +1,7 @@
 # CT Woodpecker
 
 <p align="center">
-  <img src="https://binaryparadox.net/d/ct-woodpecker.jpg" alt="ct-woodpecker: finding holes in logs"/>
+  <img src="https://github.com/letsencrypt/ct-woodpecker/raw/master/logo.jpg" alt="ct-woodpecker: finding holes in logs"/>
 <p>
 
 
