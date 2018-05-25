@@ -47,8 +47,8 @@ type IntegrationSrv struct {
 	// used to create the IntegrationSrv instance. This controls the latency
 	// pattern of add-chain/add-pre-chain responses.
 	latencySchedule []float64
-	// latencyItem is the latency used for the next add-chain/add-pre-chain and is
-	// rotated through the values from latencySchedule.
+	// latencyItem is the index into the latencySchedule used for the next
+	// add-chain/add-pre-chain.
 	latencyItem int
 
 	// server is the HTTP server listening for CT requests
@@ -122,6 +122,16 @@ func (is *IntegrationSrv) Shutdown() {
 	_ = is.server.Shutdown(context.Background())
 }
 
+func (is *IntegrationSrv) sleep() {
+	if is.latencySchedule != nil {
+		is.Lock()
+		sleepTime := time.Duration(is.latencySchedule[is.latencyItem%len(is.latencySchedule)]) * time.Second
+		is.latencyItem++
+		is.Unlock()
+		time.Sleep(sleepTime)
+	}
+}
+
 // addChain returns the raw bytes of a signed testing SCT for the given chain
 // (or an error). The submissions count will be incremented as a result. This
 // function blocks for a variable amount of time based on the latencySchedule
@@ -131,16 +141,8 @@ func (is *IntegrationSrv) addChain(chain []string, precert bool) ([]byte, error)
 		return nil, errors.New("chain argument must have len >= 1")
 	}
 
+	is.sleep()
 	atomic.AddInt64(&is.submissions, 1)
-
-	if is.latencySchedule != nil {
-		is.Lock()
-		sleepTime := time.Duration(is.latencySchedule[is.latencyItem%len(is.latencySchedule)]) * time.Second
-		is.latencyItem++
-		is.Unlock()
-		time.Sleep(sleepTime)
-	}
-
 	return createTestingSignedSCT(chain, is.key, precert, time.Now()), nil
 }
 
@@ -209,6 +211,7 @@ func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Track that an STH was fetched
 	atomic.AddInt64(&is.sthFetches, 1)
+	is.sleep()
 
 	is.RLock()
 	defer is.RUnlock()
