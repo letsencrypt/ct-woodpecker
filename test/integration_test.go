@@ -187,8 +187,8 @@ func TestFetchSTHSuccess(t *testing.T) {
 		srv.SetSTH(mockSTHs[i])
 	}
 
-	// Create a CT woodpecker configuration that fetches the STH of the two test logs every 5s
-	fetchInterval := 5 * time.Second
+	// Create a CT woodpecker configuration that fetches the STH of the two test logs every 100ms
+	fetchInterval := 100 * time.Millisecond
 	config := woodpecker.Config{
 		STHFetchInterval: fetchInterval.String(),
 		MetricsAddr:      ":1971",
