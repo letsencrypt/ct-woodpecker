@@ -132,7 +132,7 @@ func (m *Monitor) observeSTH() {
 	m.stats.sthLatency.With(labels).Observe(elapsed.Seconds())
 
 	if err != nil {
-		m.logger.Printf("!! Error fetching STH: %#v\n", err)
+		m.logger.Printf("!! Error fetching STH: %s\n", err.Error())
 		m.stats.sthFailures.With(labels).Inc()
 		return
 	}

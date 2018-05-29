@@ -1,4 +1,4 @@
-package main
+package woodpecker
 
 import (
 	"errors"
@@ -10,28 +10,28 @@ import (
 func TestLogConfigValid(t *testing.T) {
 	testCases := []struct {
 		Name   string
-		Config logConfig
+		Config LogConfig
 		Valid  bool
 	}{
 		{
 			Name:   "Empty log URI",
-			Config: logConfig{},
+			Config: LogConfig{},
 		},
 		{
 			Name:   "Invalid log URI",
-			Config: logConfig{URI: "☭"},
+			Config: LogConfig{URI: "☭"},
 		},
 		{
 			Name:   "Invalid log URI scheme",
-			Config: logConfig{URI: "☮://test"},
+			Config: LogConfig{URI: "☮://test"},
 		},
 		{
 			Name:   "Empty log key",
-			Config: logConfig{URI: "http://test.com"},
+			Config: LogConfig{URI: "http://test.com"},
 		},
 		{
 			Name:   "Valid log config",
-			Config: logConfig{URI: "https://test.com", Key: "⚷"},
+			Config: LogConfig{URI: "https://test.com", Key: "⚷"},
 			Valid:  true,
 		},
 	}
@@ -50,37 +50,36 @@ func TestLogConfigValid(t *testing.T) {
 }
 
 func TestConfigValid(t *testing.T) {
-
-	validConfig := config{
+	validConfig := Config{
 		STHFetchInterval: "2s",
-		Logs: []logConfig{
-			logConfig{URI: "https://localhost", Key: "⚷"},
+		Logs: []LogConfig{
+			LogConfig{URI: "https://localhost", Key: "⚷"},
 		},
 	}
 
 	testCases := []struct {
 		Name        string
-		Config      config
+		Config      Config
 		Valid       bool
 		MetricsAddr string
 	}{
 		{
 			Name: "Invalid STH Fetch Interval",
-			Config: config{
+			Config: Config{
 				STHFetchInterval: "idk, whenever you feel like it I guess?",
 			},
 		},
 		{
 			Name: "No log configs",
-			Config: config{
+			Config: Config{
 				STHFetchInterval: "2s",
 			},
 		},
 		{
 			Name: "Invalid log",
-			Config: config{
+			Config: Config{
 				STHFetchInterval: "2s",
-				Logs:             []logConfig{{}},
+				Logs:             []LogConfig{{}},
 			},
 		},
 		{
@@ -146,7 +145,7 @@ func TestConfigLoad(t *testing.T) {
 	testCases := []struct {
 		Name           string
 		Filepath       string
-		ExpectedConfig *config
+		ExpectedConfig *Config
 		Error          error
 	}{
 		{
@@ -161,11 +160,11 @@ func TestConfigLoad(t *testing.T) {
 		{
 			Name:     "Good config",
 			Filepath: goodConfigFile,
-			ExpectedConfig: &config{
+			ExpectedConfig: &Config{
 				STHFetchInterval: "120s",
 				MetricsAddr:      ":1971",
-				Logs: []logConfig{
-					logConfig{
+				Logs: []LogConfig{
+					LogConfig{
 						URI: "https://birch.ct.letsencrypt.org/2018",
 						Key: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
 					},
@@ -176,7 +175,7 @@ func TestConfigLoad(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			conf := config{}
+			conf := Config{}
 			err := conf.Load(tc.Filepath)
 			if err != nil {
 				if tc.Error == nil {
