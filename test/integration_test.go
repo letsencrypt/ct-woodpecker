@@ -113,10 +113,8 @@ func woodpeckerRun(conf woodpecker.Config, fetchIterations int) (string, string,
 	// Collect metrics from the woodpecker instance while it is still running
 	metricsData := getWoodpeckerMetrics("http://localhost:1971")
 
-	// Stop the monitoring process
 	woodpecker.Stop()
 
-	// Return the stdout & the metrics data
 	return out.String(), metricsData, nil
 }
 
