@@ -23,7 +23,7 @@ import (
 type Personality struct {
 	// Port (and optionally IP) to listen on
 	Addr string
-	// Private key for signing SCTs
+	// Base64 encoded private key for signing SCTs
 	// Generate your own with:
 	// openssl ecparam -name prime256v1 -genkey -outform der -noout | base64 -w 0
 	PrivKey string
