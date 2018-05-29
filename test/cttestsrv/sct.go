@@ -18,8 +18,8 @@ import (
 
 func createTestingSignedSCT(req []string, k *ecdsa.PrivateKey, precert bool, timestamp time.Time) []byte {
 	chain := make([]ct.ASN1Cert, len(req))
-	for i, str := range req {
-		b, err := base64.StdEncoding.DecodeString(str)
+	for i, certBase64 := range req {
+		b, err := base64.StdEncoding.DecodeString(certBase64)
 		if err != nil {
 			panic("cannot decode chain")
 		}
