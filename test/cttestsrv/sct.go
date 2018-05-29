@@ -27,11 +27,11 @@ func createTestingSignedSCT(req []string, k *ecdsa.PrivateKey, precert bool, tim
 	}
 
 	// Generate the internal leaf entry for the SCT
-	etype := ct.X509LogEntryType
+	entryType := ct.X509LogEntryType
 	if precert {
-		etype = ct.PrecertLogEntryType
+		entryType = ct.PrecertLogEntryType
 	}
-	leaf, err := ct.MerkleTreeLeafFromRawChain(chain, etype, 0)
+	leaf, err := ct.MerkleTreeLeafFromRawChain(chain, entryType, 0)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create leaf: %s", err))
 	}
