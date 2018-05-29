@@ -16,9 +16,8 @@ func signSTH(signer *ecdsa.PrivateKey, sth *ct.SignedTreeHead) error {
 		return err
 	}
 
-	h := sha256.New()
-	h.Write(sthBytes)
-	signature, err := signer.Sign(rand.Reader, h.Sum(nil), crypto.SHA256)
+	hash := sha256.Sum256(sthBytes)
+	signature, err := signer.Sign(rand.Reader, hash[:], crypto.SHA256)
 	if err != nil {
 		return err
 	}
