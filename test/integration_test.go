@@ -119,7 +119,7 @@ func woodpeckerRun(conf woodpecker.Config, fetchIterations int) (string, string,
 }
 
 // testServers creates & starts a number of CT test servers based on the
-// provided personalities. The servers are returned such that the caller can
+// provided personalities. The servers are returned so that the caller can
 // cleanly shut them down when required.
 func testServers(personalities []cttestsrv.Personality) []*cttestsrv.IntegrationSrv {
 	var servers []*cttestsrv.IntegrationSrv
