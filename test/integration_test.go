@@ -202,7 +202,8 @@ func TestFetchSTHSuccess(t *testing.T) {
 	}
 	config.Logs = logConfigs
 
-	// Run ct-woodpecker for 1 full STH fetch iteration using the above config
+	// Run ct-woodpecker for the specified number of iterations using the above
+	// config
 	iterations := 2
 	stdout, metricsData, err := woodpeckerRun(config, iterations)
 	if err != nil {
