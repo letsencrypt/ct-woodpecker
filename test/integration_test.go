@@ -107,8 +107,9 @@ func woodpeckerRun(conf woodpecker.Config, fetchIterations int) (string, string,
 	woodpecker.Run()
 
 	// Sleep for the right amount of time based on the fetchInterval and the
-	// requested number of iterations
-	time.Sleep(fetchInterval * time.Duration(fetchIterations))
+	// requested number of iterations.
+	jitter := time.Millisecond * 20
+	time.Sleep(fetchInterval*time.Duration(fetchIterations) + jitter)
 
 	// Collect metrics from the woodpecker instance while it is still running
 	metricsData := getWoodpeckerMetrics("http://localhost:1971")
@@ -236,7 +237,7 @@ func TestFetchSTHSuccess(t *testing.T) {
 		}
 
 		// Check that each log has the expected STH latency count
-		expectedLatencyCount := iterations
+		expectedLatencyCount := iterations + 1
 		expectedLatencyCountLine := fmt.Sprintf(`sth_latency_count{uri="http://localhost%s"} %d`,
 			srv.Addr, expectedLatencyCount)
 		if !strings.Contains(metricsData, expectedLatencyCountLine) {
