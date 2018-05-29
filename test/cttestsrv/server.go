@@ -40,7 +40,7 @@ type IntegrationSrv struct {
 	// key is the log's private key used to sign STHs and SCTs
 	key *ecdsa.PrivateKey
 
-	// PubKey is the log's public key in base64 encoded format (e.g. the "log ID")
+	// PubKey is the log's public key in base64 encoded format
 	PubKey string
 
 	// latencySchedule holds the latency schedule from the Personality that was
