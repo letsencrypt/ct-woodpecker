@@ -1,15 +1,14 @@
 package cttestsrv
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/google/certificate-transparency-go"
@@ -46,15 +45,16 @@ func createTestingSignedSCT(req []string, k *ecdsa.PrivateKey, precert bool, tim
 		Timestamp:  timestampMillis,
 	}, ct.LogEntry{Leaf: *leaf})
 	hashed := sha256.Sum256(serialized)
-	var ecdsaSig struct {
-		R, S *big.Int
+
+	sig, err := k.Sign(rand.Reader, hashed[:], crypto.SHA256)
+	if err != nil {
+		panic(fmt.Sprintf("failed to sign sct hash: %s", err))
 	}
-	ecdsaSig.R, ecdsaSig.S, _ = ecdsa.Sign(rand.Reader, k, hashed[:])
-	sig, _ := asn1.Marshal(ecdsaSig)
 
 	// The ct.SignedCertificateTimestamp object doesn't have the needed
 	// `json` tags to properly marshal so we need to transform in into
 	// a struct that does before we can send it off
+	// NOTE(@cpu): See https://github.com/google/certificate-transparency-go/issues/255
 	var jsonSCTObj struct {
 		SCTVersion ct.Version `json:"sct_version"`
 		ID         string     `json:"id"`
