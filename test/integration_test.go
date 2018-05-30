@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -107,8 +108,9 @@ func woodpeckerRun(conf woodpecker.Config, fetchIterations int) (string, string,
 	woodpecker.Run()
 
 	// Sleep for the right amount of time based on the fetchInterval and the
-	// requested number of iterations
-	time.Sleep(fetchInterval * time.Duration(fetchIterations))
+	// requested number of iterations.
+	padding := time.Millisecond * 20
+	time.Sleep(fetchInterval*time.Duration(fetchIterations) + padding)
 
 	// Collect metrics from the woodpecker instance while it is still running
 	metricsData := getWoodpeckerMetrics("http://localhost:1971")
@@ -219,9 +221,9 @@ func TestFetchSTHSuccess(t *testing.T) {
 	for i, srv := range testServers {
 		// Check how many times each log's STH was fetched by the monitor
 		sthFetches := srv.STHFetches()
-		// We expect each log had its STH fetched twice: Once at startup, and once
-		// for each of the iterations elapsed.
-		if sthFetches != int64(iterations+1) {
+		// We expect a certain minimum number of fetches based on the iterations. If
+		// there were *more* fetches that's OK, the test probably ran a little long.
+		if sthFetches < int64(iterations+1) {
 			t.Errorf("Expected %d sth fetches for log %q, got %d",
 				(iterations + 1), srv.Addr, sthFetches)
 		}
@@ -235,13 +237,20 @@ func TestFetchSTHSuccess(t *testing.T) {
 				expectedTimestampLine, metricsData)
 		}
 
-		// Check that each log has the expected STH latency count
-		expectedLatencyCount := iterations
-		expectedLatencyCountLine := fmt.Sprintf(`sth_latency_count{uri="http://localhost%s"} %d`,
-			srv.Addr, expectedLatencyCount)
-		if !strings.Contains(metricsData, expectedLatencyCountLine) {
-			t.Errorf("Could not find expected metrics line %q in metrics output: \n%s\n",
-				expectedLatencyCountLine, metricsData)
+		// Check that each log has the minimum expected STH latency count. If there
+		// were more latency submissions than expected that's OK, the test probably
+		// ran a little long.
+		expectedLatencyCountRegexp := regexp.MustCompile(
+			fmt.Sprintf(`sth_latency_count{uri="http://localhost%s"} ([\d]+)`,
+				srv.Addr))
+		expectedLatencyCount := iterations + 1
+		if matches := expectedLatencyCountRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
+			t.Errorf("Could not find expected sth_latency_count line in metrics output: \n%s\n",
+				metricsData)
+		} else if latencyCount, err := strconv.Atoi(matches[1]); err != nil {
+			t.Errorf("sth_latency_count for log %s had non-numeric value", srv.Addr)
+		} else if latencyCount < expectedLatencyCount {
+			t.Errorf("expected sth_latency_count of %d for log %s, found %d", expectedLatencyCount, srv.Addr, latencyCount)
 		}
 
 		// Check that each log has the expected STH age in the metrics output
