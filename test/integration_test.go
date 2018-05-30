@@ -109,8 +109,8 @@ func woodpeckerRun(conf woodpecker.Config, fetchIterations int) (string, string,
 
 	// Sleep for the right amount of time based on the fetchInterval and the
 	// requested number of iterations.
-	jitter := time.Millisecond * 20
-	time.Sleep(fetchInterval*time.Duration(fetchIterations) + jitter)
+	padding := time.Millisecond * 20
+	time.Sleep(fetchInterval*time.Duration(fetchIterations) + padding)
 
 	// Collect metrics from the woodpecker instance while it is still running
 	metricsData := getWoodpeckerMetrics("http://localhost:1971")
