@@ -11,6 +11,7 @@ import (
 
 	ct "github.com/google/certificate-transparency-go"
 	"github.com/jmhodges/clock"
+	"github.com/letsencrypt/ct-woodpecker/helpers"
 	"github.com/letsencrypt/ct-woodpecker/test"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -27,15 +28,16 @@ func TestNew(t *testing.T) {
 	logURI := "test"
 	processedLogKey := fmt.Sprintf("-----BEGIN PUBLIC KEY-----\n%s\n-----END PUBLIC KEY-----", logKey)
 	fetchDuration := time.Second
+	certInterval := time.Second
 
 	// Creating a monitor with an illegal key should fail
-	_, err := New(logURI, "⚷", fetchDuration, l, clk)
+	_, err := New(logURI, "⚷", fetchDuration, certInterval, nil, nil, l, clk)
 	if err == nil {
 		t.Errorf("Expected New() with invalid key to error")
 	}
 
 	// Creating a monitor with vaild configuration should not fail
-	m, err := New(logURI, logKey, fetchDuration, l, clk)
+	m, err := New(logURI, logKey, fetchDuration, certInterval, nil, nil, l, clk)
 	if err != nil {
 		t.Fatalf("Expected no error calling New(), got %s", err.Error())
 	}
@@ -59,6 +61,10 @@ func TestNew(t *testing.T) {
 		t.Errorf("Expected monitor sthFetchDuration %s got %s", m.sthFetchInterval, fetchDuration)
 	}
 
+	if m.certSubmitInterval != certInterval {
+		t.Errorf("Expected monitor certSubmitInterval %s got %s", m.certSubmitInterval, certInterval)
+	}
+
 	if m.stats == nil {
 		t.Error("Expected monitor stats to be non-nil")
 	}
@@ -69,7 +75,7 @@ func TestNew(t *testing.T) {
 }
 
 // errorClient is a type implementing the monitorCTClient interface with
-// a `GetSTH` function that always returns an error.
+// `GetSTH` and `AddChain` functions that always returns an error.
 type errorClient struct{}
 
 // GetSTH mocked to always return an error
@@ -77,8 +83,13 @@ func (c errorClient) GetSTH(_ context.Context) (*ct.SignedTreeHead, error) {
 	return nil, errors.New("ct-log logged off")
 }
 
+// AddChain mocked to always return an error
+func (c errorClient) AddChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
+	return nil, errors.New("ct-log doesn't want any chains")
+}
+
 // mockClient is a type implementing the monitorCTClient interface that always
-// returns a fixed mock STH from `GetSTH`.
+// returns a fixed mock STH from `GetSTH` and a mock SCT from `AddChain`
 type mockClient struct {
 	timestamp time.Time
 }
@@ -91,15 +102,24 @@ func (c mockClient) GetSTH(_ context.Context) (*ct.SignedTreeHead, error) {
 	}, nil
 }
 
+// AddChain mocked to always return a fixed mock SCT
+func (c mockClient) AddChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
+	ts := c.timestamp.UnixNano() / int64(time.Millisecond)
+	return &ct.SignedCertificateTimestamp{
+		Timestamp: uint64(ts),
+	}, nil
+}
+
 func TestObserveSTH(t *testing.T) {
 	l := log.New(os.Stdout, "", log.LstdFlags)
 	clk := clock.NewFake()
 	clk.Set(time.Now())
 	fetchDuration := time.Second
+	certInterval := time.Second
 	logURI := "test"
 	labels := prometheus.Labels{"uri": logURI}
 
-	m, err := New(logURI, logKey, fetchDuration, l, clk)
+	m, err := New(logURI, logKey, fetchDuration, certInterval, nil, nil, l, clk)
 	if err != nil {
 		t.Fatalf("Unexpected error from New(): %s", err.Error())
 	}
@@ -171,5 +191,114 @@ func TestObserveSTH(t *testing.T) {
 	}
 	if tsValue != expectedTSValue {
 		t.Errorf("Expected m.stats.sthTimestamp to be %d, was %d", expectedTSValue, tsValue)
+	}
+}
+
+func TestSubmitCertificate(t *testing.T) {
+	clk := clock.NewFake()
+	clk.Set(time.Now())
+	fetchDuration := time.Second
+	certInterval := time.Second
+	logURI := "test"
+	labels := prometheus.Labels{"uri": logURI}
+
+	// Create a logger backed by the safeBuffer. The log.Logger type is only safe
+	// for concurrent use when the backing buffer is. Using a raw bytes.Buffer
+	// with a shared logger will cause data races.
+	var out test.SafeBuffer
+	l := log.New(&out, "TestSubmitCertificate ", log.LstdFlags)
+
+	certIssuer, err := helpers.LoadCertificate("../test/issuer.pem")
+	if err != nil {
+		t.Fatalf("Error loading issuer cert: %s", err.Error())
+	}
+	certIssuerKey, err := helpers.LoadPrivateKey("../test/issuer.key")
+	if err != nil {
+		t.Fatalf("Error loading issuer key: %s", err.Error())
+	}
+
+	// Create a monitor configured with an certIssuer and certIssuerKey
+	m, err := New(logURI, logKey, fetchDuration, certInterval, certIssuerKey, certIssuer, l, clk)
+	if err != nil {
+		t.Fatalf("Unexpected error from New(): %s", err.Error())
+	}
+
+	sctWindow := requiredSCTFreshness + time.Second
+	tooOld := clk.Now().Add(-sctWindow)
+	tooNew := clk.Now().Add(sctWindow)
+	justRight := clk.Now().Add(sctWindow / 2)
+
+	testCases := []struct {
+		Name          string
+		MockClient    monitorCTClient
+		ExpectSuccess bool
+	}{
+		{
+			Name:       "Submission failure",
+			MockClient: errorClient{},
+		},
+		{
+			Name:       "SCT too old",
+			MockClient: mockClient{timestamp: tooOld},
+		},
+		{
+			Name:       "SCT too new",
+			MockClient: mockClient{timestamp: tooNew},
+		},
+		{
+			Name:          "SCT just right",
+			MockClient:    mockClient{timestamp: justRight},
+			ExpectSuccess: true,
+		},
+	}
+
+	successCount := 0
+	failCount := 0
+
+	for i, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			m.client = tc.MockClient
+			m.submitCertificate()
+
+			// There should always be a latency observation, regardless of whether the
+			// testcase was expected to succeed or fail.
+			latencyObservations, err := test.CountHistogramSamplesWithLabels(m.stats.certSubmitLatency, labels)
+			// There should be 1 observation for each test case
+			expectedLatencyObservations := i + 1
+			if err != nil {
+				t.Errorf("Unexpected error counting m.stats.certSubmitLatency samples: %s",
+					err.Error())
+			}
+			if latencyObservations != expectedLatencyObservations {
+				t.Errorf("Expected m.stats.certSubmitLatency to have %d sample, had %d",
+					expectedLatencyObservations, latencyObservations)
+			}
+
+			// Increment one of the expected metrics based on whether the cert
+			// submission was expected to pass or fail
+			if tc.ExpectSuccess {
+				successCount++
+			} else {
+				failCount++
+			}
+
+			failureMetric, err := test.CountCounterVecWithLabels(m.stats.certSubmitFailures, labels)
+			if err != nil {
+				t.Errorf("Unexpected error counting m.stats.certSubmitFailures countervec: %s",
+					err.Error())
+			}
+			if failureMetric != failCount {
+				t.Errorf("Expected m.stats.certSubmitFailures to be %d, was %d", failCount, failureMetric)
+			}
+
+			successMetric, err := test.CountCounterVecWithLabels(m.stats.certSubmitSuccesses, labels)
+			if err != nil {
+				t.Errorf("Unexpected error counting m.stats.certSubmitSucesses countervec: %s",
+					err.Error())
+			}
+			if successMetric != successCount {
+				t.Errorf("Expected m.stats.certSubmitSuccesses to be %d, was %d", successCount, successMetric)
+			}
+		})
 	}
 }

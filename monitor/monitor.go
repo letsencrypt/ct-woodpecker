@@ -2,8 +2,17 @@ package monitor
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
+	"math"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -22,11 +31,24 @@ type monitorStats struct {
 	sthAge       *prometheus.GaugeVec
 	sthFailures  *prometheus.CounterVec
 	sthLatency   *prometheus.HistogramVec
+
+	certSubmitLatency   *prometheus.HistogramVec
+	certSubmitFailures  *prometheus.CounterVec
+	certSubmitSuccesses *prometheus.CounterVec
 }
 
 const (
-	// sthTimeout controls how long should each STH fetch wait before timing out
+	// sthTimeout controls how long each STH fetch should wait before timing out
 	sthTimeout = time.Second * 15
+	// submitTimeout controls how long each certificate chain submission should
+	// wait before timing out
+	submitTimeout = time.Second * 15
+	// requiredSCTFreshness indicates how fresh a timestamp in a returned SCT must
+	// be for it to be considered valid.
+	requiredSCTFreshness = time.Minute * 10
+	// Prefix for the subject common name of certificates generated for submission
+	// to logs
+	subjCNPrefix = "ct-woodpecker "
 )
 
 var (
@@ -51,6 +73,19 @@ var (
 			Help:    "Latency observing CT log signed tree head (STH)",
 			Buckets: internetFacingBuckets,
 		}, []string{"uri"}),
+		certSubmitLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "cert_submit_latency",
+			Help:    "Latency submitting certificate chains to CT logs",
+			Buckets: internetFacingBuckets,
+		}, []string{"uri"}),
+		certSubmitFailures: promauto.NewCounterVec(prometheus.CounterOpts{
+			Name: "cert_submit_failures",
+			Help: "Count of failures submitting certificate chains to CT logs",
+		}, []string{"uri"}),
+		certSubmitSuccesses: promauto.NewCounterVec(prometheus.CounterOpts{
+			Name: "cert_submit_successes",
+			Help: "Count of successes submitting certificate chains to CT logs",
+		}, []string{"uri"}),
 	}
 )
 
@@ -59,6 +94,7 @@ var (
 // shimming of client methods with mock implementations for unit testing.
 type monitorCTClient interface {
 	GetSTH(context.Context) (*ct.SignedTreeHead, error)
+	AddChain(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
 }
 
 // Monitor is a struct for monitoring a CT log.
@@ -71,6 +107,15 @@ type Monitor struct {
 	client monitorCTClient
 	// How long to sleep between fetching the log's current STH
 	sthFetchInterval time.Duration
+	// How long to sleep between submitting certificates to the log
+	certSubmitInterval time.Duration
+	// ECDSA private key used to issue certificates to submit to the log. Nil if
+	// no certificates are to be submitted to the log.
+	certIssuerKey *ecdsa.PrivateKey
+	// Certificate used as the issuer for certificates submitted to the log. Nil
+	// if no certificates are to be submitted to the log. The Certificate's public
+	// key must correspond to the private key in certIssuerKey.
+	certIssuer *x509.Certificate
 }
 
 // New creates a Monitor for the given parameters. The b64key parameter is
@@ -78,7 +123,9 @@ type Monitor struct {
 // _without_ the PEM header/footer.
 func New(
 	uri, b64key string,
-	sthFetchInterval time.Duration,
+	sthFetchInterval, certSubmitInterval time.Duration,
+	certIssuerKey *ecdsa.PrivateKey,
+	certIssuer *x509.Certificate,
 	logger *log.Logger,
 	clk clock.Clock) (*Monitor, error) {
 	hc := &http.Client{
@@ -104,13 +151,16 @@ func New(
 	}
 
 	return &Monitor{
-		logger:           logger,
-		clk:              clk,
-		stats:            stats,
-		logURI:           uri,
-		logKey:           pubkey,
-		client:           client,
-		sthFetchInterval: sthFetchInterval,
+		logger:             logger,
+		clk:                clk,
+		stats:              stats,
+		logURI:             uri,
+		logKey:             pubkey,
+		client:             client,
+		sthFetchInterval:   sthFetchInterval,
+		certSubmitInterval: certSubmitInterval,
+		certIssuer:         certIssuer,
+		certIssuerKey:      certIssuerKey,
 	}, nil
 }
 
@@ -145,14 +195,126 @@ func (m *Monitor) observeSTH() {
 	m.logger.Printf("STH for %q verified. Timestamp: %s Age: %s\n", m.logURI, ts, sthAge)
 }
 
+// randKey generates a random ECDSA private key or panics.
+func randKey() *ecdsa.PrivateKey {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		panic(fmt.Sprintf("Unable to generate random ECDSA key: %s\n", err.Error()))
+	}
+	return key
+}
+
+func randSerial() *big.Int {
+	serial, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
+	if err != nil {
+		panic(fmt.Sprintf("Unable to generate random certificate serial: %s\n", err.Error()))
+	}
+	return serial
+}
+
+func (m *Monitor) issueCertificate() (*x509.Certificate, error) {
+	if m.certIssuerKey == nil {
+		return nil, errors.New("cannot issueCertificate with nil certIssuerKey")
+	}
+
+	certKey := randKey()
+	serial := randSerial()
+
+	template := &x509.Certificate{
+		Subject: pkix.Name{
+			CommonName: subjCNPrefix + hex.EncodeToString(serial.Bytes()[:3]),
+		},
+		SerialNumber:          serial,
+		NotBefore:             m.clk.Now(),
+		NotAfter:              m.clk.Now().AddDate(0, 0, 90),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		IsCA: false,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, m.certIssuer, certKey.Public(), m.certIssuerKey)
+	if err != nil {
+		return nil, err
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, err
+	}
+	return cert, nil
+}
+
+func (m *Monitor) submitCertificate() {
+	labels := prometheus.Labels{"uri": m.logURI}
+	m.logger.Printf("Submitting certificate to %q\n", m.logURI)
+
+	cert, err := m.issueCertificate()
+	if err != nil {
+		// This should not occur and if it does we should abort hard
+		panic(fmt.Sprintf("!!! Error issuing certificate: %s\n", err.Error()))
+	}
+
+	// Because ct-woodpecker issues directly off of a fake root the "chain" only
+	// contains the leaf certificate we minted in issueCertificate()
+	chain := []ct.ASN1Cert{
+		ct.ASN1Cert{Data: cert.Raw},
+	}
+
+	start := m.clk.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), submitTimeout)
+	defer cancel()
+	sct, err := m.client.AddChain(ctx, chain)
+	elapsed := m.clk.Since(start)
+	m.stats.certSubmitLatency.With(labels).Observe(elapsed.Seconds())
+
+	if err != nil {
+		m.logger.Printf("!!! Error submitting certificate to %q: %s\n", m.logURI, err.Error())
+		m.stats.certSubmitFailures.With(labels).Inc()
+		return
+	}
+
+	ts := time.Unix(0, int64(sct.Timestamp)*int64(time.Millisecond))
+	sctAge := m.clk.Since(ts)
+
+	// Check that the SCT's timestamp is within an allowable tolerance into the
+	// future and the past. The SCT's signature & log ID have already been verified by
+	// `m.client.AddChain()`
+	if sctAge > requiredSCTFreshness {
+		m.logger.Printf("!!! Error submitting certificate to %q: returned SCT timestamp signed %s in the future (expected < %s)",
+			m.logURI, sctAge, requiredSCTFreshness)
+		m.stats.certSubmitFailures.With(labels).Inc()
+		return
+	} else if sctAge < -requiredSCTFreshness {
+		m.logger.Printf("!!! Error submitting certificate to %q: returned SCT timestamp signed %s in the past (expected > %s)",
+			m.logURI, sctAge, requiredSCTFreshness)
+		m.stats.certSubmitFailures.With(labels).Inc()
+		return
+	}
+
+	m.stats.certSubmitSuccesses.With(labels).Inc()
+	m.logger.Printf("Certificate chain submitted to %q. SCT timestamp %s", m.logURI, ts)
+}
+
 // Run starts the log monitoring process by creating a goroutine that will loop
-// forever fetching the log's STH and then sleeping.
+// forever fetching the log's STH and then sleeping as well as a goroutine that
+// will submit certs forever and then sleeping (if m.certIssuerKey is not nil).
 func (m *Monitor) Run() {
 	go func() {
 		for {
 			m.observeSTH()
-			m.logger.Printf("Sleeping for %s\n", m.sthFetchInterval)
+			m.logger.Printf("Sleeping for %s before next STH check\n", m.sthFetchInterval)
 			m.clk.Sleep(m.sthFetchInterval)
 		}
 	}()
+	if m.certIssuerKey != nil {
+		go func() {
+			for {
+				m.submitCertificate()
+				m.logger.Printf("Sleeping for %s before next certificate submission\n",
+					m.certSubmitInterval)
+				m.clk.Sleep(m.certSubmitInterval)
+			}
+		}()
+	}
 }

@@ -50,11 +50,18 @@ func TestLogConfigValid(t *testing.T) {
 }
 
 func TestConfigValid(t *testing.T) {
+
+	validLogs := []LogConfig{
+		LogConfig{URI: "https://localhost", Key: "⚷", SubmitCert: false},
+		LogConfig{URI: "https://remotehost", Key: "⚷", SubmitCert: true},
+	}
+
 	validConfig := Config{
-		STHFetchInterval: "2s",
-		Logs: []LogConfig{
-			LogConfig{URI: "https://localhost", Key: "⚷"},
-		},
+		STHFetchInterval:   "2s",
+		CertSubmitInterval: "60s",
+		CertIssuerKey:      "⚷",
+		CertIssuer:         "foo",
+		Logs:               validLogs,
 	}
 
 	testCases := []struct {
@@ -80,6 +87,33 @@ func TestConfigValid(t *testing.T) {
 			Config: Config{
 				STHFetchInterval: "2s",
 				Logs:             []LogConfig{{}},
+			},
+		},
+		{
+			Name: "Log with submitCert, no CertSubmitInterval",
+			Config: Config{
+				STHFetchInterval:   "2s",
+				CertSubmitInterval: "",
+				CertIssuerKey:      "⚷",
+				Logs:               validLogs,
+			},
+		},
+		{
+			Name: "Log with submitCert, invalid CertSubmitInterval",
+			Config: Config{
+				STHFetchInterval:   "2s",
+				CertSubmitInterval: "idk, when the mood strikes...",
+				CertIssuerKey:      "⚷",
+				Logs:               validLogs,
+			},
+		},
+		{
+			Name: "Log with submitCert, no CertIssuerKey",
+			Config: Config{
+				STHFetchInterval:   "2s",
+				CertSubmitInterval: "2s",
+				CertIssuerKey:      "",
+				Logs:               validLogs,
 			},
 		},
 		{
@@ -129,11 +163,15 @@ func TestConfigLoad(t *testing.T) {
 	goodConfig := `
 {
   "sthFetchInterval": "120s",
+  "certSubmitInterval": "360s",
+  "certIssuerKey": "test/issuer.key",
+  "certIssuer": "test/issuer.pem",
   "metricsAddr": ":1971",
   "logs": [
     {
       "uri": "https://birch.ct.letsencrypt.org/2018",
-      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g=="
+      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
+      "submitCert": true
     }
   ]
 }`
@@ -161,12 +199,16 @@ func TestConfigLoad(t *testing.T) {
 			Name:     "Good config",
 			Filepath: goodConfigFile,
 			ExpectedConfig: &Config{
-				STHFetchInterval: "120s",
-				MetricsAddr:      ":1971",
+				MetricsAddr:        ":1971",
+				STHFetchInterval:   "120s",
+				CertSubmitInterval: "360s",
+				CertIssuerKey:      "test/issuer.key",
+				CertIssuer:         "test/issuer.pem",
 				Logs: []LogConfig{
 					LogConfig{
-						URI: "https://birch.ct.letsencrypt.org/2018",
-						Key: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
+						URI:        "https://birch.ct.letsencrypt.org/2018",
+						Key:        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
+						SubmitCert: true,
 					},
 				},
 			},
