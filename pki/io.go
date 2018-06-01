@@ -1,4 +1,4 @@
-package helpers
+package pki
 
 import (
 	"crypto/ecdsa"

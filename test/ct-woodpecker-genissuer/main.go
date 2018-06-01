@@ -2,27 +2,36 @@ package main
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"math"
-	"math/big"
+	"log"
 	"time"
+
+	"github.com/letsencrypt/ct-woodpecker/pki"
 )
 
 func main() {
-	issuerKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	keyBytes, _ := x509.MarshalECPrivateKey(issuerKey)
+	issuerKey, err := pki.RandKey()
+	if err != nil {
+		log.Fatalf("Unable to generate random issuer key: %s\n", err.Error())
+	}
+
+	keyBytes, err := x509.MarshalECPrivateKey(issuerKey)
+	if err != nil {
+		log.Fatalf("Unable to encode issuer key to DER: %s\n", err.Error())
+	}
+
 	encodedBytes := base64.StdEncoding.EncodeToString(keyBytes)
 	fmt.Printf("Key:\n%s\n", encodedBytes)
 
-	serial, _ := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
+	serial, err := pki.RandSerial()
+	if err != nil {
+		log.Fatalf("Unable to generate random issuer certificate serial: %s\n", err.Error())
+	}
 
 	template := &x509.Certificate{
 		Subject: pkix.Name{
@@ -37,12 +46,15 @@ func main() {
 		IsCA: true,
 	}
 
-	der, _ := x509.CreateCertificate(rand.Reader, template, template, issuerKey.Public(), issuerKey)
+	cert, err := pki.IssueCertificate(issuerKey.Public(), issuerKey, template, template)
+	if err != nil {
+		log.Fatalf("Unable to create self-signed issuer cert: %s\n", err.Error())
+	}
 
 	var pemBuffer bytes.Buffer
 	_ = pem.Encode(&pemBuffer, &pem.Block{
 		Type:  "CERTIFICATE",
-		Bytes: der,
+		Bytes: cert.Raw,
 	})
 	fmt.Printf("\nCert:\n%s\n", pemBuffer.String())
 }

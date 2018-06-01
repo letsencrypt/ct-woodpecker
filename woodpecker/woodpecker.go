@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/jmhodges/clock"
-	"github.com/letsencrypt/ct-woodpecker/helpers"
 	"github.com/letsencrypt/ct-woodpecker/monitor"
+	"github.com/letsencrypt/ct-woodpecker/pki"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -167,7 +167,7 @@ func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 	}
 	var issuerCert *x509.Certificate
 	if c.CertIssuer != "" {
-		cert, err := helpers.LoadCertificate(c.CertIssuer)
+		cert, err := pki.LoadCertificate(c.CertIssuer)
 		if err != nil {
 			return nil, err
 		}
@@ -175,7 +175,7 @@ func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 	}
 	var issuerKey *ecdsa.PrivateKey
 	if c.CertIssuerKey != "" {
-		key, err := helpers.LoadPrivateKey(c.CertIssuerKey)
+		key, err := pki.LoadPrivateKey(c.CertIssuerKey)
 		if err != nil {
 			return nil, err
 		}

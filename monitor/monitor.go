@@ -3,16 +3,9 @@ package monitor
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"log"
-	"math"
-	"math/big"
 	"net/http"
 	"time"
 
@@ -20,6 +13,7 @@ import (
 	ctClient "github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
 	"github.com/jmhodges/clock"
+	"github.com/letsencrypt/ct-woodpecker/pki"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -46,9 +40,6 @@ const (
 	// requiredSCTFreshness indicates how fresh a timestamp in a returned SCT must
 	// be for it to be considered valid.
 	requiredSCTFreshness = time.Minute * 10
-	// Prefix for the subject common name of certificates generated for submission
-	// to logs
-	subjCNPrefix = "ct-woodpecker "
 )
 
 var (
@@ -195,61 +186,6 @@ func (m *Monitor) observeSTH() {
 	m.logger.Printf("STH for %q verified. Timestamp: %s Age: %s\n", m.logURI, ts, sthAge)
 }
 
-// randKey generates a random ECDSA private key or panics.
-func randKey() *ecdsa.PrivateKey {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		panic(fmt.Sprintf("Unable to generate random ECDSA key: %s\n", err.Error()))
-	}
-	return key
-}
-
-// randSerial generates a random *bigInt to use as a certificate serial or
-// panics.
-func randSerial() *big.Int {
-	serial, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
-	if err != nil {
-		panic(fmt.Sprintf("Unable to generate random certificate serial: %s\n", err.Error()))
-	}
-	return serial
-}
-
-// issueCertificate uses the monitor's certIssuer and certIssuerKey to generate
-// a leaf-certificate that can be submitted to a log. The certificate's subject
-// common name will be the monitor's subjCNPrefix and the first three bytes of
-// the random serial number encoded in hex.
-func (m *Monitor) issueCertificate() (*x509.Certificate, error) {
-	if m.certIssuerKey == nil {
-		return nil, errors.New("cannot issueCertificate with nil certIssuerKey")
-	}
-
-	certKey := randKey()
-	serial := randSerial()
-	template := &x509.Certificate{
-		Subject: pkix.Name{
-			CommonName: subjCNPrefix + hex.EncodeToString(serial.Bytes()[:3]),
-		},
-		SerialNumber:          serial,
-		NotBefore:             m.clk.Now(),
-		NotAfter:              m.clk.Now().AddDate(0, 0, 90),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-		BasicConstraintsValid: true,
-		IsCA: false,
-	}
-
-	certDER, err := x509.CreateCertificate(rand.Reader, template, m.certIssuer, certKey.Public(), m.certIssuerKey)
-	if err != nil {
-		return nil, err
-	}
-
-	cert, err := x509.ParseCertificate(certDER)
-	if err != nil {
-		return nil, err
-	}
-	return cert, nil
-}
-
 // submitCertificate issues a certificate with the monitors
 // certIssuer/certIssuerKey and submits it to the monitored log's add-chain
 // endpoint. The latency of the submission is tracked in the certSubmitLatency
@@ -263,7 +199,7 @@ func (m *Monitor) submitCertificate() {
 	labels := prometheus.Labels{"uri": m.logURI}
 	m.logger.Printf("Submitting certificate to %q\n", m.logURI)
 
-	cert, err := m.issueCertificate()
+	cert, err := pki.IssueTestCertificate(m.certIssuerKey, m.certIssuer, m.clk)
 	if err != nil {
 		// This should not occur and if it does we should abort hard
 		panic(fmt.Sprintf("!!! Error issuing certificate: %s\n", err.Error()))

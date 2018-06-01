@@ -11,7 +11,7 @@ import (
 
 	ct "github.com/google/certificate-transparency-go"
 	"github.com/jmhodges/clock"
-	"github.com/letsencrypt/ct-woodpecker/helpers"
+	"github.com/letsencrypt/ct-woodpecker/pki"
 	"github.com/letsencrypt/ct-woodpecker/test"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -208,11 +208,11 @@ func TestSubmitCertificate(t *testing.T) {
 	var out test.SafeBuffer
 	l := log.New(&out, "TestSubmitCertificate ", log.LstdFlags)
 
-	certIssuer, err := helpers.LoadCertificate("../test/issuer.pem")
+	certIssuer, err := pki.LoadCertificate("../test/issuer.pem")
 	if err != nil {
 		t.Fatalf("Error loading issuer cert: %s", err.Error())
 	}
-	certIssuerKey, err := helpers.LoadPrivateKey("../test/issuer.key")
+	certIssuerKey, err := pki.LoadPrivateKey("../test/issuer.key")
 	if err != nil {
 		t.Fatalf("Error loading issuer key: %s", err.Error())
 	}
