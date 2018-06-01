@@ -186,7 +186,7 @@ func (m *Monitor) observeSTH() {
 	m.logger.Printf("STH for %q verified. Timestamp: %s Age: %s\n", m.logURI, ts, sthAge)
 }
 
-// submitCertificate issues a certificate with the monitors
+// submitCertificate issues a certificate with the monitor's
 // certIssuer/certIssuerKey and submits it to the monitored log's add-chain
 // endpoint. The latency of the submission is tracked in the certSubmitLatency
 // prometheus histogram. If the submission fails, or the returned SCT is invalid
