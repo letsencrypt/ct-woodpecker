@@ -204,6 +204,8 @@ func randKey() *ecdsa.PrivateKey {
 	return key
 }
 
+// randSerial generates a random *bigInt to use as a certificate serial or
+// panics.
 func randSerial() *big.Int {
 	serial, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
@@ -212,6 +214,10 @@ func randSerial() *big.Int {
 	return serial
 }
 
+// issueCertificate uses the monitor's certIssuer and certIssuerKey to generate
+// a leaf-certificate that can be submitted to a log. The certificate's subject
+// common name will be the monitor's subjCNPrefix and the first three bytes of
+// the random serial number encoded in hex.
 func (m *Monitor) issueCertificate() (*x509.Certificate, error) {
 	if m.certIssuerKey == nil {
 		return nil, errors.New("cannot issueCertificate with nil certIssuerKey")
@@ -219,7 +225,6 @@ func (m *Monitor) issueCertificate() (*x509.Certificate, error) {
 
 	certKey := randKey()
 	serial := randSerial()
-
 	template := &x509.Certificate{
 		Subject: pkix.Name{
 			CommonName: subjCNPrefix + hex.EncodeToString(serial.Bytes()[:3]),
@@ -245,6 +250,15 @@ func (m *Monitor) issueCertificate() (*x509.Certificate, error) {
 	return cert, nil
 }
 
+// submitCertificate issues a certificate with the monitors
+// certIssuer/certIssuerKey and submits it to the monitored log's add-chain
+// endpoint. The latency of the submission is tracked in the certSubmitLatency
+// prometheus histogram. If the submission fails, or the returned SCT is invalid
+// the certSubmitFailures prometheus countervec is incremented. If the
+// submission succeeds the certSubmitSuccesses prometheus countervec is
+// incremented. An SCT is considered invalid if the signature does not validate,
+// or if the timestamp is too far in the future or the past (controlled by
+// `requiredSCTFreshness`).
 func (m *Monitor) submitCertificate() {
 	labels := prometheus.Labels{"uri": m.logURI}
 	m.logger.Printf("Submitting certificate to %q\n", m.logURI)

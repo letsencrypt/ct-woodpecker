@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 )
 
+// LoadPrivateKey returns a *ecdsa.PrivateKey loaded from the BASE64 encoded DER
+// of an ECDSA private key from the provided file, or returns an error.
 func LoadPrivateKey(file string) (*ecdsa.PrivateKey, error) {
 	if encodedKeyBytes, err := ioutil.ReadFile(file); err != nil {
 		return nil, err
@@ -21,6 +23,8 @@ func LoadPrivateKey(file string) (*ecdsa.PrivateKey, error) {
 	}
 }
 
+// LoadCertificate returns the *x509.Certificate loaded from the PEM encoded
+// certificate in the provided file, or returns an error.
 func LoadCertificate(file string) (*x509.Certificate, error) {
 	if pemBytes, err := ioutil.ReadFile(file); err != nil {
 		return nil, err

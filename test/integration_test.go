@@ -53,10 +53,9 @@ func getWoodpeckerMetrics(host string) string {
 }
 
 // wodpeckerRun starts a ct-woodpecker monitor with the given configuration. It
-// is allowed to run for the given number of fetchIterations. When complete the
-// standard out and the raw metrics data from the woodpecker instance are
-// returned. If there are any unexpected problems an error is returned instead.
-// TODO(@cpu): Fix this comment
+// is allowed to run for the given duration. When complete the standard out and
+// the raw metrics data from the woodpecker instance are returned. If there are
+// any unexpected problems an error is returned instead.
 func woodpeckerRun(conf woodpecker.Config, duration time.Duration) (string, string, error) {
 	// Create a logger backed by the SafeBuffer. The log.Logger type is only safe
 	// for concurrent use when the backing buffer is. Using a raw bytes.Buffer
