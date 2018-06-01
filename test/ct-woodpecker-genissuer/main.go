@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"math"
@@ -25,7 +26,7 @@ func main() {
 
 	template := &x509.Certificate{
 		Subject: pkix.Name{
-			CommonName: "ct-woodpecker CA",
+			CommonName: "ct-woodpecker CA" + hex.EncodeToString(serial.Bytes()[:3]),
 		},
 		SerialNumber:          serial,
 		NotBefore:             time.Now(),
