@@ -237,7 +237,7 @@ func (m *Monitor) submitCertificate() {
 		return
 	} else if sctAge < -requiredSCTFreshness {
 		m.logger.Printf("!!! Error submitting certificate to %q: returned SCT timestamp signed %s in the past (expected > %s)",
-			m.logURI, sctAge, requiredSCTFreshness)
+			m.logURI, -sctAge, requiredSCTFreshness)
 		m.stats.certSubmitFailures.With(labels).Inc()
 		return
 	}
