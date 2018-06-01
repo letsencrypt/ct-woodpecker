@@ -15,6 +15,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// certSubmitterStats is a type to hold the prometheus metrics used by
+// a certSubmitter
+type certSubmitterStats struct {
+	certSubmitLatency *prometheus.HistogramVec
+	certSubmitResults *prometheus.CounterVec
+}
+
 var (
 	// submitTimeout controls how long each certificate chain submission should
 	// wait before timing out
@@ -23,6 +30,8 @@ var (
 	// be for it to be considered valid.
 	requiredSCTFreshness = time.Minute * 10
 
+	// certStats is a certSubmitterStats instance with promauto registered
+	// prometheus metrics
 	certStats *certSubmitterStats = &certSubmitterStats{
 		certSubmitLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "cert_submit_latency",
@@ -36,17 +45,14 @@ var (
 	}
 )
 
-type certSubmitterStats struct {
-	certSubmitLatency *prometheus.HistogramVec
-	certSubmitResults *prometheus.CounterVec
-}
-
+// certSubmitter is a type for periodically issuing certificates and submitting
+// them to a log's add-chain endpoint.
 type certSubmitter struct {
 	logger *log.Logger
 	clk    clock.Clock
-	stats  *certSubmitterStats
 	client monitorCTClient
 	logURI string
+	stats  *certSubmitterStats
 
 	// How long to sleep between submitting certificates to the log
 	certSubmitInterval time.Duration
@@ -59,6 +65,8 @@ type certSubmitter struct {
 	certIssuer *x509.Certificate
 }
 
+// run starts a goroutine that calls submitCertificate, sleeps for
+// certSubmitInterval and then repeats forever.
 func (c *certSubmitter) run() {
 	go func() {
 		for {

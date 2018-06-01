@@ -15,7 +15,8 @@ const (
 	sthTimeout = time.Second * 15
 )
 
-// TODO(@cpu): Document
+// sthFetchStats is a type to hold the prometheus metrics used by
+// a sthFetcher
 type sthFetchStats struct {
 	sthTimestamp *prometheus.GaugeVec
 	sthAge       *prometheus.GaugeVec
@@ -23,6 +24,8 @@ type sthFetchStats struct {
 	sthLatency   *prometheus.HistogramVec
 }
 
+// sthStats is a sthFetchStats instance with promauto registered
+// prometheus metrics
 var sthStats *sthFetchStats = &sthFetchStats{
 	sthTimestamp: promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "sth_timestamp",
@@ -43,13 +46,15 @@ var sthStats *sthFetchStats = &sthFetchStats{
 	}, []string{"uri"}),
 }
 
-// TODO(@cpu): Document
+// sthFetcher is a type for periodically fetching a log's STH and publishing
+// metrics about it.
 type sthFetcher struct {
 	logger *log.Logger
 	clk    clock.Clock
-	stats  *sthFetchStats
 	client monitorCTClient
 	logURI string
+	stats  *sthFetchStats
+
 	// How long to sleep between fetching the log's current STH
 	sthFetchInterval time.Duration
 }
