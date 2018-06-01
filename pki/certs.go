@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	// Prefix for the subject common name of certificates generated for submission
-	// to logs
-	subjCNPrefix = "ct-woodpecker "
+	// Domain suffix for the subject common name of certificates generated for submission
+	// to logs. The prefix will be generated randomly from the certificate serial number.
+	testCertDomain = ".woodpecker.testing.letsencrypt.org"
 )
 
 // RandSerial generates a random *bigInt to use as a certificate serial or
@@ -89,17 +89,22 @@ func IssueTestCertificate(
 		return nil, err
 	}
 
+	domain := hex.EncodeToString(serial.Bytes()[:5]) + testCertDomain
+
 	template := &x509.Certificate{
 		Subject: pkix.Name{
-			CommonName: subjCNPrefix + hex.EncodeToString(serial.Bytes()[:3]),
+			CommonName: domain,
 		},
+		DNSNames:              []string{domain},
 		SerialNumber:          serial,
 		NotBefore:             clk.Now(),
 		NotAfter:              clk.Now().AddDate(0, 0, 90),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 		IsCA: false,
+		IssuingCertificateURL: []string{"http://issuer" + testCertDomain},
+		CRLDistributionPoints: []string{"http://crls" + testCertDomain},
 	}
 
 	return IssueCertificate(certKey.Public(), issuerKey, issuerCert, template)
