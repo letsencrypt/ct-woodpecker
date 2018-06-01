@@ -301,11 +301,12 @@ func TestCertSubmissionSuccess(t *testing.T) {
 	}
 
 	for _, srv := range testServers {
-		// Check that each log received the expected number of chain submissions
+		// Check that each log received the minimum expected number of chain
+		// submissions
 		expectedSubmissionCount := int64(iterations + 1)
 		submissionCount := srv.Submissions()
-		if submissionCount != expectedSubmissionCount {
-			t.Errorf("Expected test server %s to have recieved %d add-chain calls, had %d",
+		if submissionCount < expectedSubmissionCount {
+			t.Errorf("Expected test server %s to have recieved >= %d add-chain calls, had %d",
 				srv.Addr, expectedSubmissionCount, submissionCount)
 		}
 
