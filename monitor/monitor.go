@@ -26,9 +26,8 @@ type monitorStats struct {
 	sthFailures  *prometheus.CounterVec
 	sthLatency   *prometheus.HistogramVec
 
-	certSubmitLatency   *prometheus.HistogramVec
-	certSubmitFailures  *prometheus.CounterVec
-	certSubmitSuccesses *prometheus.CounterVec
+	certSubmitLatency *prometheus.HistogramVec
+	certSubmitResults *prometheus.CounterVec
 }
 
 const (
@@ -69,14 +68,10 @@ var (
 			Help:    "Latency submitting certificate chains to CT logs",
 			Buckets: internetFacingBuckets,
 		}, []string{"uri"}),
-		certSubmitFailures: promauto.NewCounterVec(prometheus.CounterOpts{
-			Name: "cert_submit_failures",
-			Help: "Count of failures submitting certificate chains to CT logs",
-		}, []string{"uri"}),
-		certSubmitSuccesses: promauto.NewCounterVec(prometheus.CounterOpts{
-			Name: "cert_submit_successes",
-			Help: "Count of successes submitting certificate chains to CT logs",
-		}, []string{"uri"}),
+		certSubmitResults: promauto.NewCounterVec(prometheus.CounterOpts{
+			Name: "cert_submit_results",
+			Help: "Count of results from submitting certificate chains to CT logs, sliced by status",
+		}, []string{"uri", "status"}),
 	}
 )
 
@@ -190,13 +185,13 @@ func (m *Monitor) observeSTH() {
 // certIssuer/certIssuerKey and submits it to the monitored log's add-chain
 // endpoint. The latency of the submission is tracked in the
 // `cert_submit_latency` prometheus histogram. If the submission fails, or the
-// returned SCT is invalid the `cert_submit_failures` prometheus countervec is
-// incremented. If the submission succeeds the `cert_submit_successes`
-// prometheus countervec is  incremented. An SCT is considered invalid if the
-// signature does not validate, or if the timestamp is too far in the future or
-// the past (controlled by `requiredSCTFreshness`).
+// returned SCT is invalid the `cert_submit_results` prometheus countervec is
+// incremented with a "fail" status tag. If the submission succeeds the
+// `cert_submit_results` prometheus countervec is incremented with a "ok" status
+// tag. An SCT is considered invalid if the signature does not validate, or if
+// the timestamp is too far in the future or the past (controlled by
+// `requiredSCTFreshness`).
 func (m *Monitor) submitCertificate() {
-	labels := prometheus.Labels{"uri": m.logURI}
 	m.logger.Printf("Submitting certificate to %q\n", m.logURI)
 
 	cert, err := pki.IssueTestCertificate(m.certIssuerKey, m.certIssuer, m.clk)
@@ -212,6 +207,7 @@ func (m *Monitor) submitCertificate() {
 	}
 
 	start := m.clk.Now()
+	labels := prometheus.Labels{"uri": m.logURI}
 	ctx, cancel := context.WithTimeout(context.Background(), submitTimeout)
 	defer cancel()
 	sct, err := m.client.AddChain(ctx, chain)
@@ -220,7 +216,8 @@ func (m *Monitor) submitCertificate() {
 
 	if err != nil {
 		m.logger.Printf("!!! Error submitting certificate to %q: %s\n", m.logURI, err.Error())
-		m.stats.certSubmitFailures.With(labels).Inc()
+		labels = prometheus.Labels{"uri": m.logURI, "status": "fail"}
+		m.stats.certSubmitResults.With(labels).Inc()
 		return
 	}
 
@@ -233,16 +230,19 @@ func (m *Monitor) submitCertificate() {
 	if sctAge > requiredSCTFreshness {
 		m.logger.Printf("!!! Error submitting certificate to %q: returned SCT timestamp signed %s in the future (expected < %s)",
 			m.logURI, sctAge, requiredSCTFreshness)
-		m.stats.certSubmitFailures.With(labels).Inc()
+		labels = prometheus.Labels{"uri": m.logURI, "status": "fail"}
+		m.stats.certSubmitResults.With(labels).Inc()
 		return
 	} else if sctAge < -requiredSCTFreshness {
 		m.logger.Printf("!!! Error submitting certificate to %q: returned SCT timestamp signed %s in the past (expected > %s)",
 			m.logURI, -sctAge, requiredSCTFreshness)
-		m.stats.certSubmitFailures.With(labels).Inc()
+		labels = prometheus.Labels{"uri": m.logURI, "status": "fail"}
+		m.stats.certSubmitResults.With(labels).Inc()
 		return
 	}
 
-	m.stats.certSubmitSuccesses.With(labels).Inc()
+	labels = prometheus.Labels{"uri": m.logURI, "status": "ok"}
+	m.stats.certSubmitResults.With(labels).Inc()
 	m.logger.Printf("Certificate chain submitted to %q. SCT timestamp %s", m.logURI, ts)
 }
 

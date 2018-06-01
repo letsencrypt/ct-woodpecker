@@ -200,7 +200,6 @@ func TestSubmitCertificate(t *testing.T) {
 	fetchDuration := time.Second
 	certInterval := time.Second
 	logURI := "test"
-	labels := prometheus.Labels{"uri": logURI}
 
 	// Create a logger backed by the safeBuffer. The log.Logger type is only safe
 	// for concurrent use when the backing buffer is. Using a raw bytes.Buffer
@@ -262,6 +261,7 @@ func TestSubmitCertificate(t *testing.T) {
 
 			// There should always be a latency observation, regardless of whether the
 			// testcase was expected to succeed or fail.
+			labels := prometheus.Labels{"uri": logURI}
 			latencyObservations, err := test.CountHistogramSamplesWithLabels(m.stats.certSubmitLatency, labels)
 			// There should be 1 observation for each test case
 			expectedLatencyObservations := i + 1
@@ -282,22 +282,24 @@ func TestSubmitCertificate(t *testing.T) {
 				failCount++
 			}
 
-			failureMetric, err := test.CountCounterVecWithLabels(m.stats.certSubmitFailures, labels)
+			failureLabels := prometheus.Labels{"uri": logURI, "status": "fail"}
+			failureMetric, err := test.CountCounterVecWithLabels(m.stats.certSubmitResults, failureLabels)
 			if err != nil {
-				t.Errorf("Unexpected error counting m.stats.certSubmitFailures countervec: %s",
+				t.Errorf("Unexpected error counting m.stats.certSubmitResults countervec: %s",
 					err.Error())
 			}
 			if failureMetric != failCount {
-				t.Errorf("Expected m.stats.certSubmitFailures to be %d, was %d", failCount, failureMetric)
+				t.Errorf("Expected m.stats.certSubmitResults fail count to be %d, was %d", failCount, failureMetric)
 			}
 
-			successMetric, err := test.CountCounterVecWithLabels(m.stats.certSubmitSuccesses, labels)
+			successLabels := prometheus.Labels{"uri": logURI, "status": "ok"}
+			successMetric, err := test.CountCounterVecWithLabels(m.stats.certSubmitResults, successLabels)
 			if err != nil {
-				t.Errorf("Unexpected error counting m.stats.certSubmitSucesses countervec: %s",
+				t.Errorf("Unexpected error counting m.stats.certSubmitResults countervec: %s",
 					err.Error())
 			}
 			if successMetric != successCount {
-				t.Errorf("Expected m.stats.certSubmitSuccesses to be %d, was %d", successCount, successMetric)
+				t.Errorf("Expected m.stats.certSubmitResults OK count to be %d, was %d", successCount, successMetric)
 			}
 		})
 	}

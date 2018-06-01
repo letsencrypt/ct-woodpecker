@@ -294,9 +294,9 @@ func TestCertSubmissionSuccess(t *testing.T) {
 		t.Errorf("Unexpected cert submission error in ct-woodpecker stdout: \n%s\n", stdout)
 	}
 
-	// There should be no cert_submit_failures lines in the metrics data
-	if strings.Contains(metricsData, `cert_submit_failures`) {
-		t.Errorf("Unexpected cert_submit_failures metric in metricsData: \n%s\n", metricsData)
+	// There should be no cert_submit_results with status="fail" in the metrics data
+	if strings.Contains(metricsData, `cert_submit_results{status="fail"`) {
+		t.Errorf("Unexpected cert_submit_results with fail status in metricsData: \n%s\n", metricsData)
 	}
 
 	for _, srv := range testServers {
@@ -309,18 +309,19 @@ func TestCertSubmissionSuccess(t *testing.T) {
 				srv.Addr, expectedSubmissionCount, submissionCount)
 		}
 
-		// Check that each log has the minimum expected cert_submit_successes in metrics output
+		// Check that each log has the minimum expected cert_submit_results with
+		// status=ok in metrics output
 		expectedSuccessRegexp := regexp.MustCompile(
-			fmt.Sprintf(`cert_submit_successes{uri="http://localhost%s"} ([\d]+)`,
+			fmt.Sprintf(`cert_submit_results{status="ok",uri="http://localhost%s"} ([\d]+)`,
 				srv.Addr))
 		expectedSuccess := iterations + 1
 		if matches := expectedSuccessRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
-			t.Errorf("Could not find expected cert_submit_successes line in metrics output: \n%s\n",
+			t.Errorf("Could not find expected cert_submit_results status=ok line in metrics output: \n%s\n",
 				metricsData)
 		} else if successCount, err := strconv.Atoi(matches[1]); err != nil {
-			t.Errorf("cert_submit_successes for log %s had non-numeric value", srv.Addr)
+			t.Errorf("cert_submit_results status=ok count for log %s had non-numeric value", srv.Addr)
 		} else if successCount < expectedSuccess {
-			t.Errorf("expected cert_submit_lsuccesses of %d for log %s, found %d",
+			t.Errorf("expected cert_submit_results status=ok count of %d for log %s, found %d",
 				expectedSuccess, srv.Addr, successCount)
 		}
 
