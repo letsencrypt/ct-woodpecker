@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -196,9 +197,9 @@ func TestFetchSTHSuccess(t *testing.T) {
 	for i, srv := range testServers {
 		// Check how many times each log's STH was fetched by the monitor
 		sthFetches := srv.STHFetches()
-		// We expect each log had its STH fetched twice: Once at startup, and once
-		// for each of the iterations elapsed.
-		if sthFetches != int64(iterations+1) {
+		// We expect a certain minimum number of fetches based on the iterations. If
+		// there were *more* fetches that's OK, the test probably ran a little long.
+		if sthFetches < int64(iterations+1) {
 			t.Errorf("Expected %d sth fetches for log %q, got %d",
 				(iterations + 1), srv.Addr, sthFetches)
 		}
@@ -212,13 +213,20 @@ func TestFetchSTHSuccess(t *testing.T) {
 				expectedTimestampLine, metricsData)
 		}
 
-		// Check that each log has the expected STH latency count
+		// Check that each log has the minimum expected STH latency count. If there
+		// were more latency submissions than expected that's OK, the test probably
+		// ran a little long.
+		expectedLatencyCountRegexp := regexp.MustCompile(
+			fmt.Sprintf(`sth_latency_count{uri="http://localhost%s"} ([\d]+)`,
+				srv.Addr))
 		expectedLatencyCount := iterations + 1
-		expectedLatencyCountLine := fmt.Sprintf(`sth_latency_count{uri="http://localhost%s"} %d`,
-			srv.Addr, expectedLatencyCount)
-		if !strings.Contains(metricsData, expectedLatencyCountLine) {
-			t.Errorf("Could not find expected metrics line %q in metrics output: \n%s\n",
-				expectedLatencyCountLine, metricsData)
+		if matches := expectedLatencyCountRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
+			t.Errorf("Could not find expected sth_latency_count line in metrics output: \n%s\n",
+				metricsData)
+		} else if latencyCount, err := strconv.Atoi(matches[1]); err != nil {
+			t.Errorf("sth_latency_count for log %s had non-numeric value", srv.Addr)
+		} else if latencyCount < expectedLatencyCount {
+			t.Errorf("expected sth_latency_count of %d for log %s, found %d", expectedLatencyCount, srv.Addr, latencyCount)
 		}
 
 		// Check that each log has the expected STH age in the metrics output
@@ -296,28 +304,41 @@ func TestCertSubmissionSuccess(t *testing.T) {
 		// Check that each log received the expected number of chain submissions
 		expectedSubmissionCount := int64(iterations + 1)
 		submissionCount := srv.Submissions()
-
 		if submissionCount != expectedSubmissionCount {
 			t.Errorf("Expected test server %s to have recieved %d add-chain calls, had %d",
 				srv.Addr, expectedSubmissionCount, submissionCount)
 		}
 
-		// Check that each log has the expected cert_submit_successes in metrics output
+		// Check that each log has the minimum expected cert_submit_successes in metrics output
+		expectedSuccessRegexp := regexp.MustCompile(
+			fmt.Sprintf(`cert_submit_successes{uri="http://localhost%s"} ([\d]+)`,
+				srv.Addr))
 		expectedSuccess := iterations + 1
-		expectedSuccessLine := fmt.Sprintf(`cert_submit_successes{uri="http://localhost%s"} %d`,
-			srv.Addr, expectedSuccess)
-		if !strings.Contains(metricsData, expectedSuccessLine) {
-			t.Errorf("Could not find expected cert_submit_successes line %q in metrics output: \n%s\n",
-				expectedSuccessLine, metricsData)
+		if matches := expectedSuccessRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
+			t.Errorf("Could not find expected cert_submit_successes line in metrics output: \n%s\n",
+				metricsData)
+		} else if successCount, err := strconv.Atoi(matches[1]); err != nil {
+			t.Errorf("cert_submit_successes for log %s had non-numeric value", srv.Addr)
+		} else if successCount < expectedSuccess {
+			t.Errorf("expected cert_submit_lsuccesses of %d for log %s, found %d",
+				expectedSuccess, srv.Addr, successCount)
 		}
 
-		// Check that each log has the expected cert_submit_latency_count
+		// Check that each log has the minimum expected cert_submit_latency_count.
+		// If there were more latency submissions than expected that's OK, the test
+		// probably ran a little long.
+		expectedLatencyCountRegexp := regexp.MustCompile(
+			fmt.Sprintf(`cert_submit_latency_count{uri="http://localhost%s"} ([\d]+)`,
+				srv.Addr))
 		expectedLatencyCount := iterations + 1
-		expectedLatencyCountLine := fmt.Sprintf(`cert_submit_latency_count{uri="http://localhost%s"} %d`,
-			srv.Addr, expectedLatencyCount)
-		if !strings.Contains(metricsData, expectedLatencyCountLine) {
-			t.Errorf("Could not find expected cert_submit_latency_count line %q in metrics output: \n%s\n",
-				expectedLatencyCountLine, metricsData)
+		if matches := expectedLatencyCountRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
+			t.Errorf("Could not find expected cert_submit_latency_count line in metrics output: \n%s\n",
+				metricsData)
+		} else if latencyCount, err := strconv.Atoi(matches[1]); err != nil {
+			t.Errorf("cert_submit_latency_count for log %s had non-numeric value", srv.Addr)
+		} else if latencyCount < expectedLatencyCount {
+			t.Errorf("expected cert_submit_latency_count of %d for log %s, found %d",
+				expectedLatencyCount, srv.Addr, latencyCount)
 		}
 	}
 }
