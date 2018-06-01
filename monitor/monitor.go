@@ -188,13 +188,13 @@ func (m *Monitor) observeSTH() {
 
 // submitCertificate issues a certificate with the monitor's
 // certIssuer/certIssuerKey and submits it to the monitored log's add-chain
-// endpoint. The latency of the submission is tracked in the certSubmitLatency
-// prometheus histogram. If the submission fails, or the returned SCT is invalid
-// the certSubmitFailures prometheus countervec is incremented. If the
-// submission succeeds the certSubmitSuccesses prometheus countervec is
-// incremented. An SCT is considered invalid if the signature does not validate,
-// or if the timestamp is too far in the future or the past (controlled by
-// `requiredSCTFreshness`).
+// endpoint. The latency of the submission is tracked in the
+// `cert_submit_latency` prometheus histogram. If the submission fails, or the
+// returned SCT is invalid the `cert_submit_failures` prometheus countervec is
+// incremented. If the submission succeeds the `cert_submit_successes`
+// prometheus countervec is  incremented. An SCT is considered invalid if the
+// signature does not validate, or if the timestamp is too far in the future or
+// the past (controlled by `requiredSCTFreshness`).
 func (m *Monitor) submitCertificate() {
 	labels := prometheus.Labels{"uri": m.logURI}
 	m.logger.Printf("Submitting certificate to %q\n", m.logURI)
