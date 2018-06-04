@@ -44,8 +44,6 @@ func RandKey() (*ecdsa.PrivateKey, error) {
 // a leaf-certificate that can be submitted to a log. The certificate's subject
 // common name will be the monitor's subjCNPrefix and the first three bytes of
 // the random serial number encoded in hex.
-// TODO(@cpu) Write this comment
-
 func IssueCertificate(
 	subjectKey crypto.PublicKey,
 	issuerKey *ecdsa.PrivateKey,
