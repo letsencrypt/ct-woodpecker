@@ -2,6 +2,8 @@ package monitor
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/x509"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,66 +13,27 @@ import (
 	ctClient "github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
 	"github.com/jmhodges/clock"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// monitorStat is a struct collecting up various prometheus metrics a monitor
-// will export/track.
-type monitorStats struct {
-	sthTimestamp *prometheus.GaugeVec
-	sthAge       *prometheus.GaugeVec
-	sthFailures  *prometheus.CounterVec
-	sthLatency   *prometheus.HistogramVec
-}
-
-const (
-	// sthTimeout controls how long should each STH fetch wait before timing out
-	sthTimeout = time.Second * 15
-)
-
-var (
-	// internetFacingBuckets are histogram buckets suitable for measuring
-	// latencies that involve traversing the public internet.
-	internetFacingBuckets               = []float64{.1, .25, .5, 1, 2.5, 5, 7.5, 10, 15, 30, 45}
-	stats                 *monitorStats = &monitorStats{
-		sthTimestamp: promauto.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "sth_timestamp",
-			Help: "Timestamp of observed CT log signed tree head (STH)",
-		}, []string{"uri"}),
-		sthAge: promauto.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "sth_age",
-			Help: "Elapsed time since observed CT log signed tree head (STH) timestamp",
-		}, []string{"uri"}),
-		sthFailures: promauto.NewCounterVec(prometheus.CounterOpts{
-			Name: "sth_failures",
-			Help: "Count of failures fetching CT log signed tree head (STH)",
-		}, []string{"uri"}),
-		sthLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "sth_latency",
-			Help:    "Latency observing CT log signed tree head (STH)",
-			Buckets: internetFacingBuckets,
-		}, []string{"uri"}),
-	}
-)
+// internetFacingBuckets are histogram buckets suitable for measuring
+// latencies that involve traversing the public internet.
+var internetFacingBuckets = []float64{.1, .25, .5, 1, 2.5, 5, 7.5, 10, 15, 30, 45}
 
 // monitorCTClient is an interface that specifies the ctClient.LogClient
 // functions that the monitor package uses. This interface allows for easy
 // shimming of client methods with mock implementations for unit testing.
 type monitorCTClient interface {
 	GetSTH(context.Context) (*ct.SignedTreeHead, error)
+	AddChain(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
 }
 
 // Monitor is a struct for monitoring a CT log.
 type Monitor struct {
 	logger *log.Logger
 	clk    clock.Clock
-	stats  *monitorStats
-	logURI string
-	logKey string
-	client monitorCTClient
-	// How long to sleep between fetching the log's current STH
-	sthFetchInterval time.Duration
+
+	fetcher   *sthFetcher
+	submitter *certSubmitter
 }
 
 // New creates a Monitor for the given parameters. The b64key parameter is
@@ -78,7 +41,9 @@ type Monitor struct {
 // _without_ the PEM header/footer.
 func New(
 	uri, b64key string,
-	sthFetchInterval time.Duration,
+	sthFetchInterval, certSubmitInterval time.Duration,
+	certIssuerKey *ecdsa.PrivateKey,
+	certIssuer *x509.Certificate,
 	logger *log.Logger,
 	clk clock.Clock) (*Monitor, error) {
 	hc := &http.Client{
@@ -103,56 +68,42 @@ func New(
 		return nil, err
 	}
 
-	return &Monitor{
-		logger:           logger,
-		clk:              clk,
-		stats:            stats,
-		logURI:           uri,
-		logKey:           pubkey,
-		client:           client,
-		sthFetchInterval: sthFetchInterval,
-	}, nil
-}
+	m := &Monitor{
+		logger: logger,
+		clk:    clk,
 
-// observeSTH fetches the monitored log's signed tree head (STH). The latency of
-// this operation is published to the `sthLatency` metric. The clocktime elapsed
-// since the STH's timestamp is published to the `sthAge` metric. If an error
-// occurs the `sthFailures` metric will be incremented. If the operation
-// succeeds then the `sthTimestamp` gauge will be updated to the returned STH's
-// timestamp.
-func (m *Monitor) observeSTH() {
-	labels := prometheus.Labels{"uri": m.logURI}
-	m.logger.Printf("Fetching STH for %q\n", m.logURI)
-
-	start := m.clk.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), sthTimeout)
-	defer cancel()
-	sth, err := m.client.GetSTH(ctx)
-	elapsed := m.clk.Since(start)
-	m.stats.sthLatency.With(labels).Observe(elapsed.Seconds())
-
-	if err != nil {
-		m.logger.Printf("!! Error fetching STH: %s\n", err.Error())
-		m.stats.sthFailures.With(labels).Inc()
-		return
+		fetcher: &sthFetcher{
+			logger:           logger,
+			clk:              clk,
+			stats:            sthStats,
+			client:           client,
+			logURI:           uri,
+			sthFetchInterval: sthFetchInterval,
+		},
 	}
 
-	m.stats.sthTimestamp.With(labels).Set(float64(sth.Timestamp))
-	ts := time.Unix(0, int64(sth.Timestamp)*int64(time.Millisecond))
-	sthAge := m.clk.Since(ts)
-	m.stats.sthAge.With(labels).Set(sthAge.Seconds())
+	if certIssuerKey != nil {
+		m.submitter = &certSubmitter{
+			logger:             logger,
+			clk:                clk,
+			stats:              certStats,
+			client:             client,
+			logURI:             uri,
+			certSubmitInterval: certSubmitInterval,
+			certIssuer:         certIssuer,
+			certIssuerKey:      certIssuerKey,
+		}
+	}
 
-	m.logger.Printf("STH for %q verified. Timestamp: %s Age: %s\n", m.logURI, ts, sthAge)
+	return m, nil
 }
 
-// Run starts the log monitoring process by creating a goroutine that will loop
-// forever fetching the log's STH and then sleeping.
+// Run starts the log monitoring process by starting the log's STH fetcher and
+// the cert submitter.
 func (m *Monitor) Run() {
-	go func() {
-		for {
-			m.observeSTH()
-			m.logger.Printf("Sleeping for %s\n", m.sthFetchInterval)
-			m.clk.Sleep(m.sthFetchInterval)
-		}
-	}()
+	m.fetcher.run()
+
+	if m.submitter != nil {
+		m.submitter.run()
+	}
 }

@@ -2,6 +2,8 @@ package woodpecker
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,20 +15,43 @@ import (
 
 	"github.com/jmhodges/clock"
 	"github.com/letsencrypt/ct-woodpecker/monitor"
+	"github.com/letsencrypt/ct-woodpecker/pki"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Config is a struct holding the command line configuration data
 type Config struct {
+	// Duration string describing the sleep period between STH fetches
 	STHFetchInterval string
-	MetricsAddr      string
-	Logs             []LogConfig
+
+	// Address for the woodpecker metrics server
+	MetricsAddr string
+
+	// Slice of logConfigs describing logs to monitor
+	Logs []LogConfig
+
+	// Path to a file containing a BASE64 encoded ECDSA private key
+	// Generate with `ct-woodpecker-genissuer` from `test/`
+	CertIssuerKey string
+
+	// Path to a file containing a PEM encoded issuer certificate with a public
+	// key matching the private key in CertIssuerKey
+	// Generate with `ct-woodpecker-genissuer` from `test/`
+	CertIssuer string
+
+	// Duration string describing the sleep period between submitting certificates
+	// to the monitor logs
+	CertSubmitInterval string
 }
 
 // LogConfig describes a log to be monitored
 type LogConfig struct {
+	// URI of the CT Log
 	URI string
+	// Base64 encoded public key for the CT log
 	Key string
+	// Should woodpecker submit certificates to this log every CertSubmitInterval?
+	SubmitCert bool
 }
 
 // Valid checks that a logConfig is valid. If the log has no URI, an invalid
@@ -60,9 +85,29 @@ func (c *Config) Valid() error {
 	if len(c.Logs) < 1 {
 		return errors.New("At least one log must be configured")
 	}
+	var submit bool
 	for _, lc := range c.Logs {
 		if err := lc.Valid(); err != nil {
 			return err
+		}
+		// Note that there is at least one log configured to have certificates
+		// submitted
+		if lc.SubmitCert {
+			submit = true
+		}
+	}
+	// If there is a log configured to have certificates submitted to it then the
+	// configuration must have a valid cert submit interval and a non-empty
+	// CertIssuerKey and CertIssuer
+	if submit {
+		if _, err := time.ParseDuration(c.CertSubmitInterval); err != nil {
+			return err
+		}
+		if c.CertIssuerKey == "" {
+			return errors.New("CertIssuerKey can not be empty when one or more logs has SubmitCert: true")
+		}
+		if c.CertIssuer == "" {
+			return errors.New("CertIssuer can not be empty when one or more logs has SubmitCert: true")
 		}
 	}
 	return nil
@@ -113,12 +158,38 @@ func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 	if err != nil {
 		return nil, err
 	}
+	var certInterval time.Duration
+	if c.CertSubmitInterval != "" {
+		certInterval, err = time.ParseDuration(c.CertSubmitInterval)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var issuerCert *x509.Certificate
+	if c.CertIssuer != "" {
+		cert, err := pki.LoadCertificate(c.CertIssuer)
+		if err != nil {
+			return nil, err
+		}
+		issuerCert = cert
+	}
+	var issuerKey *ecdsa.PrivateKey
+	if c.CertIssuerKey != "" {
+		key, err := pki.LoadPrivateKey(c.CertIssuerKey)
+		if err != nil {
+			return nil, err
+		}
+		issuerKey = key
+	}
 	var monitors []*monitor.Monitor
 	for _, logConf := range c.Logs {
 		m, err := monitor.New(
 			logConf.URI,
 			logConf.Key,
 			fetchInterval,
+			certInterval,
+			issuerKey,
+			issuerCert,
 			logger,
 			clk)
 		if err != nil {
@@ -140,9 +211,9 @@ func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 func initMetrics(addr string) *http.Server {
 	// Create an HTTP server for Prometheus metrics to be served from.
 	statsServer := &http.Server{
-		Addr: addr,
+		Addr:    addr,
+		Handler: promhttp.Handler(),
 	}
-	http.Handle("/metrics", promhttp.Handler())
 	return statsServer
 }
 

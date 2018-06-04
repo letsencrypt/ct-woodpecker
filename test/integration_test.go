@@ -3,7 +3,6 @@
 package test
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,7 +11,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -54,41 +52,15 @@ func getWoodpeckerMetrics(host string) string {
 	return string(body)
 }
 
-// safeBuffer is a wrapper around a bytes.Buffer that is made safe for
-// concurrent access. This is required for making a logger backed by a bytes
-// buffer that can be used by a woodpecker instance across multiple goroutines
-// without a data race.
-type safeBuffer struct {
-	b bytes.Buffer
-	m sync.RWMutex
-}
-
-func (b *safeBuffer) Read(p []byte) (n int, err error) {
-	b.m.RLock()
-	defer b.m.RUnlock()
-	return b.b.Read(p)
-}
-func (b *safeBuffer) Write(p []byte) (n int, err error) {
-	b.m.Lock()
-	defer b.m.Unlock()
-	return b.b.Write(p)
-}
-
-func (b *safeBuffer) String() string {
-	b.m.RLock()
-	defer b.m.RUnlock()
-	return b.b.String()
-}
-
 // wodpeckerRun starts a ct-woodpecker monitor with the given configuration. It
-// is allowed to run for the given number of fetchIterations. When complete the
-// standard out and the raw metrics data from the woodpecker instance are
-// returned. If there are any unexpected problems an error is returned instead.
-func woodpeckerRun(conf woodpecker.Config, fetchIterations int) (string, string, error) {
-	// Create a logger backed by the safeBuffer. The log.Logger type is only safe
+// is allowed to run for the given duration. When complete the standard out and
+// the raw metrics data from the woodpecker instance are returned. If there are
+// any unexpected problems an error is returned instead.
+func woodpeckerRun(conf woodpecker.Config, duration time.Duration) (string, string, error) {
+	// Create a logger backed by the SafeBuffer. The log.Logger type is only safe
 	// for concurrent use when the backing buffer is. Using a raw bytes.Buffer
 	// with a shared logger will cause data races.
-	var out safeBuffer
+	var out SafeBuffer
 	logger := log.New(&out, "integration test ", log.LstdFlags)
 	clk := clock.Default()
 
@@ -98,19 +70,11 @@ func woodpeckerRun(conf woodpecker.Config, fetchIterations int) (string, string,
 		return "", "", err
 	}
 
-	// Calculate the fetchInterval duration from the configuration
-	fetchInterval, err := time.ParseDuration(conf.STHFetchInterval)
-	if err != nil {
-		return "", "", err
-	}
-
 	// Start the monitoring process
 	woodpecker.Run()
 
-	// Sleep for the right amount of time based on the fetchInterval and the
-	// requested number of iterations.
-	padding := time.Millisecond * 20
-	time.Sleep(fetchInterval*time.Duration(fetchIterations) + padding)
+	// Sleep for the requested amount of time
+	time.Sleep(duration)
 
 	// Collect metrics from the woodpecker instance while it is still running
 	metricsData := getWoodpeckerMetrics("http://localhost:1971")
@@ -121,9 +85,10 @@ func woodpeckerRun(conf woodpecker.Config, fetchIterations int) (string, string,
 }
 
 // testServers creates & starts a number of CT test servers based on the
-// provided personalities. The servers are returned so that the caller can
-// cleanly shut them down when required.
-func testServers(personalities []cttestsrv.Personality) []*cttestsrv.IntegrationSrv {
+// provided personalities. The servers and a cleanup function are returned to
+// the caller. The cleanup function can be used to gracefully stop the challenge
+// servers.
+func testServers(personalities []cttestsrv.Personality) ([]*cttestsrv.IntegrationSrv, func()) {
 	var servers []*cttestsrv.IntegrationSrv
 	for _, p := range personalities {
 		logger := log.New(os.Stdout, fmt.Sprintf("ct-test-srv %q ", p.Addr), log.LstdFlags)
@@ -135,7 +100,11 @@ func testServers(personalities []cttestsrv.Personality) []*cttestsrv.Integration
 		srv.Run()
 	}
 
-	return servers
+	return servers, func() {
+		for _, srv := range servers {
+			srv.Shutdown()
+		}
+	}
 }
 
 // defaultPersonalities returns hardcoded Personality data suitable for running
@@ -170,7 +139,8 @@ func TestFetchSTHSuccess(t *testing.T) {
 	now := time.Now()
 
 	// Create and start some CT test servers with the default personalities
-	testServers := testServers(defaultPersonalities())
+	testServers, cleanup := testServers(defaultPersonalities())
+	defer cleanup()
 
 	// Generate a mock STH for each of the CT test servers
 	mockSTHs := make([]*ct.SignedTreeHead, len(testServers))
@@ -204,10 +174,15 @@ func TestFetchSTHSuccess(t *testing.T) {
 	}
 	config.Logs = logConfigs
 
+	// Sleep for the right amount of time based on the fetchInterval and the
+	// number of iterations.
+	iterations := 2
+	padding := time.Millisecond * 20
+	duration := fetchInterval*time.Duration(iterations) + padding
+
 	// Run ct-woodpecker for the specified number of iterations using the above
 	// config
-	iterations := 2
-	stdout, metricsData, err := woodpeckerRun(config, iterations)
+	stdout, metricsData, err := woodpeckerRun(config, duration)
 	if err != nil {
 		t.Fatalf("woodpecker run failed: %s", err.Error())
 	}
@@ -263,6 +238,108 @@ func TestFetchSTHSuccess(t *testing.T) {
 		if !expectedAgeRegex.MatchString(metricsData) {
 			t.Errorf("Could not find expected metrics line %q in metrics output: \n%s\n",
 				expectedAgeRegex.String(), metricsData)
+		}
+	}
+}
+
+func TestCertSubmissionSuccess(t *testing.T) {
+	// root is an encoded SHA256 hash that we can jam into mock STHs
+	var root ct.SHA256Hash
+	_ = root.FromBase64String("ZVWlmKuutzCIAIjNuVW0kYrk69eqWbNtLX86CBMVneg=")
+
+	// Create and start some CT test servers with the default personalities
+	testServers, cleanup := testServers(defaultPersonalities())
+	defer cleanup()
+
+	ts := time.Now().UnixNano() / int64(time.Millisecond)
+	// Set a mock STH for each log
+	for _, srv := range testServers {
+		srv.SetSTH(&ct.SignedTreeHead{
+			TreeSize:       0xC0FFEE,
+			SHA256RootHash: root,
+			Timestamp:      uint64(ts),
+		})
+	}
+
+	// Create a woodpecker Config that submits a cert every 100ms
+	submitInterval := 100 * time.Millisecond
+	config := woodpecker.Config{
+		MetricsAddr:        ":1971",
+		STHFetchInterval:   time.Hour.String(),
+		CertSubmitInterval: submitInterval.String(),
+		CertIssuer:         "../test/issuer.pem",
+		CertIssuerKey:      "../test/issuer.key",
+	}
+	logConfigs := make([]woodpecker.LogConfig, len(testServers))
+	for i, srv := range testServers {
+		logConfigs[i] = woodpecker.LogConfig{
+			URI: fmt.Sprintf("http://localhost%s", srv.Addr),
+			Key: srv.PubKey,
+		}
+	}
+	config.Logs = logConfigs
+
+	// Run ct-woodpecker for the specified number of iterations using the above
+	// config
+	iterations := 2
+	padding := time.Millisecond * 50
+	duration := submitInterval*time.Duration(iterations) + padding
+	stdout, metricsData, err := woodpeckerRun(config, duration)
+	if err != nil {
+		t.Fatalf("woodpecker run failed: %s", err.Error())
+	}
+
+	// There should be no cert submission errors in the stdout
+	if strings.Contains(stdout, "Error submitting certificate") {
+		t.Errorf("Unexpected cert submission error in ct-woodpecker stdout: \n%s\n", stdout)
+	}
+
+	// There should be no cert_submit_results with status="fail" in the metrics data
+	if strings.Contains(metricsData, `cert_submit_results{status="fail"`) {
+		t.Errorf("Unexpected cert_submit_results with fail status in metricsData: \n%s\n", metricsData)
+	}
+
+	for _, srv := range testServers {
+		// Check that each log received the minimum expected number of chain
+		// submissions
+		expectedSubmissionCount := int64(iterations + 1)
+		submissionCount := srv.Submissions()
+		if submissionCount < expectedSubmissionCount {
+			t.Errorf("Expected test server %s to have recieved >= %d add-chain calls, had %d",
+				srv.Addr, expectedSubmissionCount, submissionCount)
+		}
+
+		// Check that each log has the minimum expected cert_submit_results with
+		// status=ok in metrics output
+		expectedSuccessRegexp := regexp.MustCompile(
+			fmt.Sprintf(`cert_submit_results{status="ok",uri="http://localhost%s"} ([\d]+)`,
+				srv.Addr))
+		expectedSuccess := iterations + 1
+		if matches := expectedSuccessRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
+			t.Errorf("Could not find expected cert_submit_results status=ok line in metrics output: \n%s\n",
+				metricsData)
+		} else if successCount, err := strconv.Atoi(matches[1]); err != nil {
+			t.Errorf("cert_submit_results status=ok count for log %s had non-numeric value", srv.Addr)
+		} else if successCount < expectedSuccess {
+			t.Errorf("expected cert_submit_results status=ok count of %d for log %s, found %d",
+				expectedSuccess, srv.Addr, successCount)
+		}
+
+		// Check that each log has the minimum expected cert_submit_latency_count.
+		// If there were more latency submissions than expected that's OK, the test
+		// probably ran a little long.
+		expectedLatencyCountRegexp := regexp.MustCompile(
+			fmt.Sprintf(`cert_submit_latency_count{uri="http://localhost%s"} ([\d]+)`,
+				srv.Addr))
+		expectedLatencyCount := iterations + 1
+		if matches := expectedLatencyCountRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
+			t.Errorf("Could not find expected cert_submit_latency_count line in metrics output: \n%s\n",
+				metricsData)
+		} else if latencyCount, err := strconv.Atoi(matches[1]); err != nil {
+			t.Errorf("cert_submit_latency_count for log %s had non-numeric value", srv.Addr)
+		} else if latencyCount < expectedLatencyCount {
+			t.Errorf("expected cert_submit_latency_count of %d for log %s, found %d",
+				expectedLatencyCount, srv.Addr, latencyCount)
 		}
 	}
 }
