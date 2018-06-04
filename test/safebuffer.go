@@ -14,23 +14,28 @@ type SafeBuffer struct {
 	m sync.RWMutex
 }
 
+// Reset safely resets the wrapped buffer
 func (b *SafeBuffer) Reset() {
 	b.m.Lock()
 	defer b.m.Unlock()
 	b.b.Reset()
 }
 
+// Read safely reads from the wrapped buffer
 func (b *SafeBuffer) Read(p []byte) (n int, err error) {
 	b.m.RLock()
 	defer b.m.RUnlock()
 	return b.b.Read(p)
 }
+
+// Write safely writes to the wrapped buffer
 func (b *SafeBuffer) Write(p []byte) (n int, err error) {
 	b.m.Lock()
 	defer b.m.Unlock()
 	return b.b.Write(p)
 }
 
+// String safely reads from the wrapped buffer
 func (b *SafeBuffer) String() string {
 	b.m.RLock()
 	defer b.m.RUnlock()

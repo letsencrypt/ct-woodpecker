@@ -52,8 +52,8 @@ func TestLogConfigValid(t *testing.T) {
 func TestConfigValid(t *testing.T) {
 
 	validLogs := []LogConfig{
-		LogConfig{URI: "https://localhost", Key: "⚷", SubmitCert: false},
-		LogConfig{URI: "https://remotehost", Key: "⚷", SubmitCert: true},
+		{URI: "https://localhost", Key: "⚷", SubmitCert: false},
+		{URI: "https://remotehost", Key: "⚷", SubmitCert: true},
 	}
 
 	validConfig := Config{
@@ -205,7 +205,7 @@ func TestConfigLoad(t *testing.T) {
 				CertIssuerKey:      "test/issuer.key",
 				CertIssuer:         "test/issuer.pem",
 				Logs: []LogConfig{
-					LogConfig{
+					{
 						URI:        "https://birch.ct.letsencrypt.org/2018",
 						Key:        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
 						SubmitCert: true,

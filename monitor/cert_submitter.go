@@ -103,7 +103,7 @@ func (c *certSubmitter) submitCertificate() {
 	// Because ct-woodpecker issues directly off of a fake root the "chain" only
 	// contains the leaf certificate we minted in issueCertificate()
 	chain := []ct.ASN1Cert{
-		ct.ASN1Cert{Data: cert.Raw},
+		{Data: cert.Raw},
 	}
 
 	start := c.clk.Now()

@@ -52,7 +52,7 @@ func New(
 
 	// By convention CT log public keys are shared/configured in base64 encoded
 	// DER. The `ctclient.New()` constructor expects a vanilla PEM block, that is,
-	// base64 encoded DER surronded by a header/footer. We manufacture such
+	// base64 encoded DER surrounded by a header/footer. We manufacture such
 	// a block here using the b64key
 	pubkey := fmt.Sprintf("-----BEGIN PUBLIC KEY-----\n%s\n-----END PUBLIC KEY-----", b64key)
 
