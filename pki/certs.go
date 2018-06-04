@@ -40,10 +40,8 @@ func RandKey() (*ecdsa.PrivateKey, error) {
 	return key, nil
 }
 
-// IssueCertificate uses the monitor's certIssuer and certIssuerKey to generate
-// a leaf-certificate that can be submitted to a log. The certificate's subject
-// common name will be the monitor's subjCNPrefix and the first three bytes of
-// the random serial number encoded in hex.
+// IssueCertificate uses the provided issuerKey and issuerCert to issue a new
+// X509 Certificate with the provided subjectKey based on the provided template.
 func IssueCertificate(
 	subjectKey crypto.PublicKey,
 	issuerKey *ecdsa.PrivateKey,
@@ -73,6 +71,13 @@ func IssueCertificate(
 	return cert, nil
 }
 
+// IssueCertificate uses the monitor's certIssuer and certIssuerKey to generate
+// a leaf-certificate that can be submitted to a log. The certificate's subject
+// common name will be a random subdomain based on the certificate serial under
+// the `testCertDomain` domain. This function creates certificates that will be
+// submitted to public logs and so while they are not issued by a trusted root
+// we try to avoid cablint errors to avoid requiring log monitors special-case
+// our submissions.
 func IssueTestCertificate(
 	issuerKey *ecdsa.PrivateKey,
 	issuerCert *x509.Certificate,
