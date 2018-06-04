@@ -305,7 +305,7 @@ func TestCertSubmissionSuccess(t *testing.T) {
 		expectedSubmissionCount := int64(iterations + 1)
 		submissionCount := srv.Submissions()
 		if submissionCount < expectedSubmissionCount {
-			t.Errorf("Expected test server %s to have recieved >= %d add-chain calls, had %d",
+			t.Errorf("Expected test server %s to have received >= %d add-chain calls, had %d",
 				srv.Addr, expectedSubmissionCount, submissionCount)
 		}
 
