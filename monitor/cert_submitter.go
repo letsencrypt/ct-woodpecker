@@ -56,12 +56,9 @@ type certSubmitter struct {
 
 	// How long to sleep between submitting certificates to the log
 	certSubmitInterval time.Duration
-	// ECDSA private key used to issue certificates to submit to the log. Nil if
-	// no certificates are to be submitted to the log.
+	// ECDSA private key used to issue certificates to submit to the log.
 	certIssuerKey *ecdsa.PrivateKey
-	// Certificate used as the issuer for certificates submitted to the log. Nil
-	// if no certificates are to be submitted to the log. The Certificate's public
-	// key must correspond to the private key in certIssuerKey.
+	// Certificate used as the issuer for certificates submitted to the log.
 	certIssuer *x509.Certificate
 }
 
@@ -89,6 +86,12 @@ func (c *certSubmitter) run() {
 // the timestamp is too far in the future or the past (controlled by
 // `requiredSCTFreshness`).
 func (c *certSubmitter) submitCertificate() {
+	// a certSubmitter requires a non-nil certIssuerKey and certIssuer. If somehow
+	// was one created with nil values then panic.
+	if c.certIssuerKey == nil || c.certIssuer == nil {
+		panic("certSubmitter created with nil certIssuerKey or certIssuer\n")
+	}
+
 	c.logger.Printf("Submitting certificate to %q\n", c.logURI)
 
 	cert, err := pki.IssueTestCertificate(c.certIssuerKey, c.certIssuer, c.clk)
