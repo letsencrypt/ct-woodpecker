@@ -103,17 +103,15 @@ func (c *certSubmitter) submitCertificate() {
 		ct.ASN1Cert{Data: cert.Raw},
 	}
 
-	latencyLabels := prometheus.Labels{"uri": c.logURI}
-	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail"}
-	successLabels := prometheus.Labels{"uri": c.logURI, "status": "ok"}
-
 	start := c.clk.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), submitTimeout)
 	defer cancel()
 	sct, err := c.client.AddChain(ctx, chain)
 	elapsed := c.clk.Since(start)
+	latencyLabels := prometheus.Labels{"uri": c.logURI}
 	c.stats.certSubmitLatency.With(latencyLabels).Observe(elapsed.Seconds())
 
+	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail"}
 	if err != nil {
 		c.logger.Printf("!!! Error submitting certificate to %q: %s\n", c.logURI, err.Error())
 		c.stats.certSubmitResults.With(failLabels).Inc()
@@ -138,6 +136,7 @@ func (c *certSubmitter) submitCertificate() {
 		return
 	}
 
+	successLabels := prometheus.Labels{"uri": c.logURI, "status": "ok"}
 	c.stats.certSubmitResults.With(successLabels).Inc()
 	c.logger.Printf("Certificate chain submitted to %q. SCT timestamp %s", c.logURI, ts)
 }
