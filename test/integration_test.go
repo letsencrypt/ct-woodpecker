@@ -111,7 +111,7 @@ func testServers(personalities []cttestsrv.Personality) ([]*cttestsrv.Integratio
 // two test CT log servers, one on :4500, one on :4501.
 func defaultPersonalities() []cttestsrv.Personality {
 	return []cttestsrv.Personality{
-		cttestsrv.Personality{
+		{
 			Addr:    ":4500",
 			PrivKey: "MHcCAQEEIOCtGlGt/WT7471dOHdfBg43uJWJoZDkZAQjWfTitcVNoAoGCCqGSM49AwEHoUQDQgAEYggOxPnPkzKBIhTacSYoIfnSL2jPugcbUKx83vFMvk5gKAz/AGe87w20riuPwEGn229hKVbEKHFB61NIqNHC3Q==",
 			LatencySchedule: []float64{
@@ -119,7 +119,7 @@ func defaultPersonalities() []cttestsrv.Personality {
 				0.5,
 			},
 		},
-		cttestsrv.Personality{
+		{
 			Addr:    ":4501",
 			PrivKey: "MHcCAQEEIJSCFDYXt2xCIxv+G8BCzGdUsFIQDWEjxfJDfnn9JB5loAoGCCqGSM49AwEHoUQDQgAEKtnFevaXV/kB8dmhCNZHmxKVLcHX1plaAsY9LrKilhYxdmQZiu36LvAvosTsqMVqRK9a96nC8VaxAdaHUbM8EA==",
 			LatencySchedule: []float64{
