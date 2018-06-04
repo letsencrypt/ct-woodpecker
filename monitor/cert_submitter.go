@@ -125,12 +125,12 @@ func (c *certSubmitter) submitCertificate() {
 	// future and the past. The SCT's signature & log ID have already been verified by
 	// `m.client.AddChain()`
 	if sctAge > requiredSCTFreshness {
-		c.logger.Printf("!!! Error submitting certificate to %q: returned SCT timestamp signed %s in the future (expected < %s)",
+		c.logger.Printf("!!! Error submitting certificate to %q: returned SCT timestamp signed %s in the future (expected <= %s)",
 			c.logURI, sctAge, requiredSCTFreshness)
 		c.stats.certSubmitResults.With(failLabels).Inc()
 		return
-	} else if sctAge < -requiredSCTFreshness {
-		c.logger.Printf("!!! Error submitting certificate to %q: returned SCT timestamp signed %s in the past (expected > %s)",
+	} else if -sctAge > requiredSCTFreshness {
+		c.logger.Printf("!!! Error submitting certificate to %q: returned SCT timestamp signed %s in the past (expected <= %s)",
 			c.logURI, -sctAge, requiredSCTFreshness)
 		c.stats.certSubmitResults.With(failLabels).Inc()
 		return
