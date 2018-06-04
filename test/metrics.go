@@ -8,7 +8,7 @@ import (
 	"github.com/prometheus/client_model/go"
 )
 
-// CountCounterVecWithLAbels returns the current count a prometheus CounterVec
+// CountCounterVecWithLabels returns the current count a prometheus CounterVec
 // with the given labels, or an error if there was a problem collecting the
 // value.
 func CountCounterVecWithLabels(counterVec *prometheus.CounterVec, labels prometheus.Labels) (int, error) {

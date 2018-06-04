@@ -71,7 +71,7 @@ func IssueCertificate(
 	return cert, nil
 }
 
-// IssueCertificate uses the monitor's certIssuer and certIssuerKey to generate
+// IssueTestCertificate uses the monitor's certIssuer and certIssuerKey to generate
 // a leaf-certificate that can be submitted to a log. The certificate's subject
 // common name will be a random subdomain based on the certificate serial under
 // the `testCertDomain` domain. This function creates certificates that will be
