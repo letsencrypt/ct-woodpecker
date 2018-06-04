@@ -179,7 +179,7 @@ func (is *IntegrationSrv) addChainHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write(sct)
+	_, _ = w.Write(sct)
 }
 
 // Submissions returns the number of add-chain/add-pre-chain requests processed
@@ -227,7 +227,7 @@ func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) 
 
 // SetSTH allows setting the server's mock STH. It is safe to call concurrently.
 func (is *IntegrationSrv) SetSTH(mockSTH *ct.SignedTreeHead) {
-	signSTH(is.key, mockSTH)
+	_ = signSTH(is.key, mockSTH)
 	is.Lock()
 	defer is.Unlock()
 	is.sth = mockSTH
