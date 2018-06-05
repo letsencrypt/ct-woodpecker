@@ -27,13 +27,24 @@ func TestNew(t *testing.T) {
 	certInterval := time.Second
 
 	// Creating a monitor with an illegal key should fail
-	_, err := New(logURI, "⚷", fetchDuration, certInterval, nil, nil, l, clk)
+	_, err := New(
+		MonitorOptions{
+			LogURI: logURI,
+			LogKey: "⚷",
+		}, l, clk)
 	if err == nil {
 		t.Errorf("Expected New() with invalid key to error")
 	}
 
 	// Creating a monitor with vaild configuration should not fail
-	m, err := New(logURI, logKey, fetchDuration, certInterval, nil, nil, l, clk)
+	m, err := New(
+		MonitorOptions{
+			LogURI: logURI,
+			LogKey: logKey,
+			FetchOpts: &FetcherOptions{
+				Interval: fetchDuration,
+			},
+		}, l, clk)
 	if err != nil {
 		t.Fatalf("Expected no error calling New(), got %s", err.Error())
 	}
@@ -65,7 +76,7 @@ func TestNew(t *testing.T) {
 		t.Errorf("Expected monitor fetcher client to be non-nil")
 	}
 
-	// With no issuer key there should be no submitter
+	// With no SubmitOpts there should be no submitter
 	if m.submitter != nil {
 		t.Fatalf("Expected monitor to have a nil submitter")
 	}
@@ -81,9 +92,23 @@ func TestNew(t *testing.T) {
 	}
 
 	// Creating a monitor with a issuer key and cert should not error
-	m, err = New(logURI, logKey, fetchDuration, certInterval, key, cert, l, clk)
+	m, err = New(
+		MonitorOptions{
+			LogURI: logURI,
+			LogKey: logKey,
+			SubmitOpts: &SubmitterOptions{
+				Interval:      fetchDuration,
+				IssuerKey:     key,
+				IssuerCert:    cert,
+				SubmitPreCert: true,
+			},
+		}, l, clk)
 	if err != nil {
-		t.Fatalf("Unexpected error creating monitor with submitter")
+		t.Fatalf("Unexpected error creating monitor with submitter: %s", err)
+	}
+
+	if m.fetcher != nil {
+		t.Errorf("Expected monitor to have a nil fetcher")
 	}
 
 	if m.submitter == nil {
@@ -92,6 +117,10 @@ func TestNew(t *testing.T) {
 
 	if m.submitter.certSubmitInterval != certInterval {
 		t.Errorf("Expected monitor submitter certSubmitInterval %s got %s", m.submitter.certSubmitInterval, certInterval)
+	}
+
+	if !m.submitter.submitPreCert {
+		t.Errorf("Expected monitor submitter to have true submitPreCert, was false")
 	}
 
 	if m.submitter.stats == nil {
@@ -117,6 +146,10 @@ func (c errorClient) AddChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCer
 	return nil, errors.New("ct-log doesn't want any chains")
 }
 
+func (c errorClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
+	return nil, errors.New("ct-log doesn't want any prechains")
+}
+
 // mockClient is a type implementing the monitorCTClient interface that always
 // returns a fixed mock STH from `GetSTH` and a mock SCT from `AddChain`
 type mockClient struct {
@@ -133,6 +166,14 @@ func (c mockClient) GetSTH(_ context.Context) (*ct.SignedTreeHead, error) {
 
 // AddChain mocked to always return a fixed mock SCT
 func (c mockClient) AddChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
+	ts := c.timestamp.UnixNano() / int64(time.Millisecond)
+	return &ct.SignedCertificateTimestamp{
+		Timestamp: uint64(ts),
+	}, nil
+}
+
+// AddPreChain mocked to always return a fixed mock SCT
+func (c mockClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
 	ts := c.timestamp.UnixNano() / int64(time.Millisecond)
 	return &ct.SignedCertificateTimestamp{
 		Timestamp: uint64(ts),

@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"log"
+	"strconv"
 	"testing"
 	"time"
 
@@ -11,10 +12,38 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+func assertLatencySamples(t *testing.T, logURI string, precert bool, expected int, histogram *prometheus.HistogramVec) {
+	labels := prometheus.Labels{"uri": logURI, "precert": strconv.FormatBool(precert)}
+	latencyObservations, err := test.CountHistogramSamplesWithLabels(histogram, labels)
+	if err != nil {
+		t.Errorf("Unexpected error counting latency histogram samples: %s",
+			err.Error())
+	}
+	if latencyObservations != expected {
+		t.Errorf("Expected %d latency histogram samples. Found %d",
+			expected, latencyObservations)
+	}
+}
+
+func assertResultsCount(t *testing.T, logURI string, precert bool, success bool, expected int, counter *prometheus.CounterVec) {
+	status := "fail"
+	if success {
+		status = "ok"
+	}
+	labels := prometheus.Labels{"uri": logURI, "status": status, "precert": strconv.FormatBool(precert)}
+
+	count, err := test.CountCounterVecWithLabels(counter, labels)
+	if err != nil {
+		t.Errorf("Unexpected error counting CounterVec: %s", err.Error())
+	}
+	if count != expected {
+		t.Errorf("Expected countervec to be %d, was %d", expected, count)
+	}
+}
+
 func TestSubmitCertificate(t *testing.T) {
 	clk := clock.NewFake()
 	clk.Set(time.Now())
-	fetchDuration := time.Second
 	certInterval := time.Second
 	logURI := "test"
 
@@ -33,8 +62,20 @@ func TestSubmitCertificate(t *testing.T) {
 		t.Fatalf("Error loading issuer key: %s", err.Error())
 	}
 
-	// Create a monitor configured with an certIssuer and certIssuerKey
-	m, err := New(logURI, logKey, fetchDuration, certInterval, certIssuerKey, certIssuer, l, clk)
+	// Create a monitor configured with an certIssuer and certIssuerKey that is
+	// configured to submit precerts
+	m, err := New(
+		MonitorOptions{
+			LogURI: logURI,
+			LogKey: logKey,
+			SubmitOpts: &SubmitterOptions{
+				Interval:      certInterval,
+				IssuerKey:     certIssuerKey,
+				IssuerCert:    certIssuer,
+				SubmitCert:    true,
+				SubmitPreCert: true,
+			},
+		}, l, clk)
 	if err != nil {
 		t.Fatalf("Unexpected error from New(): %s", err.Error())
 	}
@@ -74,22 +115,14 @@ func TestSubmitCertificate(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
 			m.submitter.client = tc.MockClient
-			m.submitter.submitCertificate()
+			m.submitter.submitCertificates()
 
-			// There should always be a latency observation, regardless of whether the
-			// testcase was expected to succeed or fail.
-			labels := prometheus.Labels{"uri": logURI}
-			latencyObservations, err := test.CountHistogramSamplesWithLabels(m.submitter.stats.certSubmitLatency, labels)
-			// There should be 1 observation for each test case
+			// There should be 1 latency observation for each test case
 			expectedLatencyObservations := i + 1
-			if err != nil {
-				t.Errorf("Unexpected error counting m.submitter.stats.certSubmitLatency samples: %s",
-					err.Error())
-			}
-			if latencyObservations != expectedLatencyObservations {
-				t.Errorf("Expected m.submitter.stats.certSubmitLatency to have %d sample, had %d",
-					expectedLatencyObservations, latencyObservations)
-			}
+			// Check once for precerts
+			assertLatencySamples(t, logURI, true, expectedLatencyObservations, m.submitter.stats.certSubmitLatency)
+			// and again for full certs
+			assertLatencySamples(t, logURI, false, expectedLatencyObservations, m.submitter.stats.certSubmitLatency)
 
 			// Increment one of the expected metrics based on whether the cert
 			// submission was expected to pass or fail
@@ -99,25 +132,15 @@ func TestSubmitCertificate(t *testing.T) {
 				failCount++
 			}
 
-			failureLabels := prometheus.Labels{"uri": logURI, "status": "fail"}
-			failureMetric, err := test.CountCounterVecWithLabels(m.submitter.stats.certSubmitResults, failureLabels)
-			if err != nil {
-				t.Errorf("Unexpected error counting m.submitter.stats.certSubmitResults countervec: %s",
-					err.Error())
-			}
-			if failureMetric != failCount {
-				t.Errorf("Expected m.submitter.stats.certSubmitResults fail count to be %d, was %d", failCount, failureMetric)
-			}
+			// There should be the correct number of failed precert submissions
+			assertResultsCount(t, logURI, true, false, failCount, m.submitter.stats.certSubmitResults)
+			// and the correct number of failed cert submissions
+			assertResultsCount(t, logURI, false, false, failCount, m.submitter.stats.certSubmitResults)
 
-			successLabels := prometheus.Labels{"uri": logURI, "status": "ok"}
-			successMetric, err := test.CountCounterVecWithLabels(m.submitter.stats.certSubmitResults, successLabels)
-			if err != nil {
-				t.Errorf("Unexpected error counting m.submitter.stats.certSubmitResults countervec: %s",
-					err.Error())
-			}
-			if successMetric != successCount {
-				t.Errorf("Expected m.submitter.stats.certSubmitResults OK count to be %d, was %d", successCount, successMetric)
-			}
+			// There should also be the correct number of successful precert submissions
+			assertResultsCount(t, logURI, true, true, successCount, m.submitter.stats.certSubmitResults)
+			// and the correct number of successful cert submissions
+			assertResultsCount(t, logURI, false, true, successCount, m.submitter.stats.certSubmitResults)
 		})
 	}
 }

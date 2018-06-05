@@ -98,6 +98,20 @@ func testServers(personalities []cttestsrv.Personality) ([]*cttestsrv.Integratio
 		}
 		servers = append(servers, srv)
 		srv.Run()
+
+		// Wait for a little bit for the test server to come up before proceeding
+		ready := false
+		for i := 0; i < 5; i++ {
+			_, err := http.Get(fmt.Sprintf("http://localhost%s", p.Addr))
+			if err == nil {
+				ready = true
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+		if !ready {
+			panic(fmt.Sprintf("Timed out waiting for ct-testserver %s\n", p.Addr))
+		}
 	}
 
 	return servers, func() {
@@ -136,11 +150,12 @@ func TestFetchSTHSuccess(t *testing.T) {
 	// root is an encoded SHA256 hash that we can jam into mock STHs
 	var root ct.SHA256Hash
 	_ = root.FromBase64String("ZVWlmKuutzCIAIjNuVW0kYrk69eqWbNtLX86CBMVneg=")
-	now := time.Now()
 
 	// Create and start some CT test servers with the default personalities
 	testServers, cleanup := testServers(defaultPersonalities())
 	defer cleanup()
+
+	now := time.Now()
 
 	// Generate a mock STH for each of the CT test servers
 	mockSTHs := make([]*ct.SignedTreeHead, len(testServers))
@@ -162,8 +177,10 @@ func TestFetchSTHSuccess(t *testing.T) {
 	// Create a CT woodpecker configuration that fetches the STH of the two test logs every 100ms
 	fetchInterval := 100 * time.Millisecond
 	config := woodpecker.Config{
-		STHFetchInterval: fetchInterval.String(),
-		MetricsAddr:      ":1971",
+		MetricsAddr: ":1971",
+		FetchConfig: &woodpecker.STHFetchConfig{
+			Interval: fetchInterval.String(),
+		},
 	}
 	logConfigs := make([]woodpecker.LogConfig, len(testServers))
 	for i, srv := range testServers {
@@ -177,7 +194,7 @@ func TestFetchSTHSuccess(t *testing.T) {
 	// Sleep for the right amount of time based on the fetchInterval and the
 	// number of iterations.
 	iterations := 2
-	padding := time.Millisecond * 20
+	padding := time.Millisecond * 50
 	duration := fetchInterval*time.Duration(iterations) + padding
 
 	// Run ct-woodpecker for the specified number of iterations using the above
@@ -261,20 +278,23 @@ func TestCertSubmissionSuccess(t *testing.T) {
 		})
 	}
 
-	// Create a woodpecker Config that submits a cert every 100ms
+	// Create a woodpecker Config that submits a precert and a cert every 100ms
 	submitInterval := 100 * time.Millisecond
 	config := woodpecker.Config{
-		MetricsAddr:        ":1971",
-		STHFetchInterval:   time.Hour.String(),
-		CertSubmitInterval: submitInterval.String(),
-		CertIssuer:         "../test/issuer.pem",
-		CertIssuerKey:      "../test/issuer.key",
+		MetricsAddr: ":1971",
+		SubmitConfig: &woodpecker.CertSubmitConfig{
+			Interval:          submitInterval.String(),
+			CertIssuerPath:    "../test/issuer.pem",
+			CertIssuerKeyPath: "../test/issuer.key",
+		},
 	}
 	logConfigs := make([]woodpecker.LogConfig, len(testServers))
 	for i, srv := range testServers {
 		logConfigs[i] = woodpecker.LogConfig{
-			URI: fmt.Sprintf("http://localhost%s", srv.Addr),
-			Key: srv.PubKey,
+			URI:           fmt.Sprintf("http://localhost%s", srv.Addr),
+			Key:           srv.PubKey,
+			SubmitCert:    true,
+			SubmitPreCert: true,
 		}
 	}
 	config.Logs = logConfigs
@@ -282,7 +302,7 @@ func TestCertSubmissionSuccess(t *testing.T) {
 	// Run ct-woodpecker for the specified number of iterations using the above
 	// config
 	iterations := 2
-	padding := time.Millisecond * 50
+	padding := time.Millisecond * 80
 	duration := submitInterval*time.Duration(iterations) + padding
 	stdout, metricsData, err := woodpeckerRun(config, duration)
 	if err != nil {
@@ -294,52 +314,67 @@ func TestCertSubmissionSuccess(t *testing.T) {
 		t.Errorf("Unexpected cert submission error in ct-woodpecker stdout: \n%s\n", stdout)
 	}
 
-	// There should be no cert_submit_results with status="fail" in the metrics data
-	if strings.Contains(metricsData, `cert_submit_results{status="fail"`) {
+	// There should be no cert_submit_results with status="fail" in the metrics data for precerts or certs
+	if strings.Contains(metricsData, `cert_submit_results{precert="true",status="fail"`) {
 		t.Errorf("Unexpected cert_submit_results with fail status in metricsData: \n%s\n", metricsData)
+	}
+	if strings.Contains(metricsData, `cert_submit_results{precert="false",status="fail"`) {
+		t.Errorf("Unexpected cert_submit_results with fail status in metricsData: \n%s\n", metricsData)
+	}
+
+	assertResultsStat := func(precert bool, status, addr string, expected int, metricsData string) {
+		statRegexp := regexp.MustCompile(
+			fmt.Sprintf(`cert_submit_results{precert="%s",status="%s",uri="http://localhost%s"} ([\d]+)`,
+				strconv.FormatBool(precert), status, addr))
+		if matches := statRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
+			t.Errorf("Could not find expected cert_submit_results line in metrics output: \n%s\n",
+				metricsData)
+		} else if count, err := strconv.Atoi(matches[1]); err != nil {
+			t.Errorf("cert_submit_results count for log %s had non-numeric value", addr)
+		} else if count < expected {
+			t.Errorf("expected cert_submit_results count of >= %d for log %s, found %d",
+				expected, addr, count)
+		}
+	}
+
+	assertLatencyCount := func(precert bool, addr string, expected int, metricsData string) {
+		statRegexp := regexp.MustCompile(
+			fmt.Sprintf(`cert_submit_latency_count{precert="%s",uri="http://localhost%s"} ([\d]+)`,
+				strconv.FormatBool(precert), addr))
+		if matches := statRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
+			t.Errorf("Could not find expected cert_submit_latency_count line in metrics output: \n%s\n",
+				metricsData)
+		} else if latencyCount, err := strconv.Atoi(matches[1]); err != nil {
+			t.Errorf("cert_submit_latency_count for log %s had non-numeric value", addr)
+		} else if latencyCount < expected {
+			t.Errorf("expected cert_submit_latency_count of >= %d for log %s, found %d",
+				expected, addr, latencyCount)
+		}
 	}
 
 	for _, srv := range testServers {
 		// Check that each log received the minimum expected number of chain
-		// submissions
-		expectedSubmissionCount := int64(iterations + 1)
+		// submissions. We multiply by two because the cttestsrv counts both final
+		// and precert submissions with the same counter.
+		expectedSubmissionCount := int64(iterations+1) * 2
 		submissionCount := srv.Submissions()
 		if submissionCount < expectedSubmissionCount {
+			fmt.Printf("ct-woodpecker output: \n%s\n", stdout)
 			t.Errorf("Expected test server %s to have received >= %d add-chain calls, had %d",
 				srv.Addr, expectedSubmissionCount, submissionCount)
 		}
 
 		// Check that each log has the minimum expected cert_submit_results with
-		// status=ok in metrics output
-		expectedSuccessRegexp := regexp.MustCompile(
-			fmt.Sprintf(`cert_submit_results{status="ok",uri="http://localhost%s"} ([\d]+)`,
-				srv.Addr))
+		// status=ok in metrics output for both precerts and cert
 		expectedSuccess := iterations + 1
-		if matches := expectedSuccessRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
-			t.Errorf("Could not find expected cert_submit_results status=ok line in metrics output: \n%s\n",
-				metricsData)
-		} else if successCount, err := strconv.Atoi(matches[1]); err != nil {
-			t.Errorf("cert_submit_results status=ok count for log %s had non-numeric value", srv.Addr)
-		} else if successCount < expectedSuccess {
-			t.Errorf("expected cert_submit_results status=ok count of %d for log %s, found %d",
-				expectedSuccess, srv.Addr, successCount)
-		}
+		assertResultsStat(true, "ok", srv.Addr, expectedSuccess, metricsData)
+		assertResultsStat(false, "ok", srv.Addr, expectedSuccess, metricsData)
 
-		// Check that each log has the minimum expected cert_submit_latency_count.
-		// If there were more latency submissions than expected that's OK, the test
-		// probably ran a little long.
-		expectedLatencyCountRegexp := regexp.MustCompile(
-			fmt.Sprintf(`cert_submit_latency_count{uri="http://localhost%s"} ([\d]+)`,
-				srv.Addr))
+		// Check that each log has the minimum expected cert_submit_latency_count
+		// for both precerts and certs. If there were more latency submissions than
+		// expected that's OK, the test probably ran a little long.
 		expectedLatencyCount := iterations + 1
-		if matches := expectedLatencyCountRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
-			t.Errorf("Could not find expected cert_submit_latency_count line in metrics output: \n%s\n",
-				metricsData)
-		} else if latencyCount, err := strconv.Atoi(matches[1]); err != nil {
-			t.Errorf("cert_submit_latency_count for log %s had non-numeric value", srv.Addr)
-		} else if latencyCount < expectedLatencyCount {
-			t.Errorf("expected cert_submit_latency_count of %d for log %s, found %d",
-				expectedLatencyCount, srv.Addr, latencyCount)
-		}
+		assertLatencyCount(true, srv.Addr, expectedLatencyCount, metricsData)
+		assertLatencyCount(false, srv.Addr, expectedLatencyCount, metricsData)
 	}
 }
