@@ -302,7 +302,7 @@ func TestCertSubmissionSuccess(t *testing.T) {
 	// Run ct-woodpecker for the specified number of iterations using the above
 	// config
 	iterations := 2
-	padding := time.Millisecond * 80
+	padding := time.Millisecond * 90
 	duration := submitInterval*time.Duration(iterations) + padding
 	stdout, metricsData, err := woodpeckerRun(config, duration)
 	if err != nil {
