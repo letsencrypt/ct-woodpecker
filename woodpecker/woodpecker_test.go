@@ -1,4 +1,4 @@
-package main
+package woodpecker
 
 import (
 	"errors"
@@ -10,28 +10,28 @@ import (
 func TestLogConfigValid(t *testing.T) {
 	testCases := []struct {
 		Name   string
-		Config logConfig
+		Config LogConfig
 		Valid  bool
 	}{
 		{
 			Name:   "Empty log URI",
-			Config: logConfig{},
+			Config: LogConfig{},
 		},
 		{
 			Name:   "Invalid log URI",
-			Config: logConfig{URI: "☭"},
+			Config: LogConfig{URI: "☭"},
 		},
 		{
 			Name:   "Invalid log URI scheme",
-			Config: logConfig{URI: "☮://test"},
+			Config: LogConfig{URI: "☮://test"},
 		},
 		{
 			Name:   "Empty log key",
-			Config: logConfig{URI: "http://test.com"},
+			Config: LogConfig{URI: "http://test.com"},
 		},
 		{
 			Name:   "Valid log config",
-			Config: logConfig{URI: "https://test.com", Key: "⚷"},
+			Config: LogConfig{URI: "https://test.com", Key: "⚷"},
 			Valid:  true,
 		},
 	}
@@ -51,36 +51,69 @@ func TestLogConfigValid(t *testing.T) {
 
 func TestConfigValid(t *testing.T) {
 
-	validConfig := config{
-		STHFetchInterval: "2s",
-		Logs: []logConfig{
-			logConfig{URI: "https://localhost", Key: "⚷"},
-		},
+	validLogs := []LogConfig{
+		{URI: "https://localhost", Key: "⚷", SubmitCert: false},
+		{URI: "https://remotehost", Key: "⚷", SubmitCert: true},
+	}
+
+	validConfig := Config{
+		STHFetchInterval:   "2s",
+		CertSubmitInterval: "60s",
+		CertIssuerKey:      "⚷",
+		CertIssuer:         "foo",
+		Logs:               validLogs,
 	}
 
 	testCases := []struct {
 		Name        string
-		Config      config
+		Config      Config
 		Valid       bool
 		MetricsAddr string
 	}{
 		{
 			Name: "Invalid STH Fetch Interval",
-			Config: config{
+			Config: Config{
 				STHFetchInterval: "idk, whenever you feel like it I guess?",
 			},
 		},
 		{
 			Name: "No log configs",
-			Config: config{
+			Config: Config{
 				STHFetchInterval: "2s",
 			},
 		},
 		{
 			Name: "Invalid log",
-			Config: config{
+			Config: Config{
 				STHFetchInterval: "2s",
-				Logs:             []logConfig{{}},
+				Logs:             []LogConfig{{}},
+			},
+		},
+		{
+			Name: "Log with submitCert, no CertSubmitInterval",
+			Config: Config{
+				STHFetchInterval:   "2s",
+				CertSubmitInterval: "",
+				CertIssuerKey:      "⚷",
+				Logs:               validLogs,
+			},
+		},
+		{
+			Name: "Log with submitCert, invalid CertSubmitInterval",
+			Config: Config{
+				STHFetchInterval:   "2s",
+				CertSubmitInterval: "idk, when the mood strikes...",
+				CertIssuerKey:      "⚷",
+				Logs:               validLogs,
+			},
+		},
+		{
+			Name: "Log with submitCert, no CertIssuerKey",
+			Config: Config{
+				STHFetchInterval:   "2s",
+				CertSubmitInterval: "2s",
+				CertIssuerKey:      "",
+				Logs:               validLogs,
 			},
 		},
 		{
@@ -130,11 +163,15 @@ func TestConfigLoad(t *testing.T) {
 	goodConfig := `
 {
   "sthFetchInterval": "120s",
+  "certSubmitInterval": "360s",
+  "certIssuerKey": "test/issuer.key",
+  "certIssuer": "test/issuer.pem",
   "metricsAddr": ":1971",
   "logs": [
     {
       "uri": "https://birch.ct.letsencrypt.org/2018",
-      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g=="
+      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
+      "submitCert": true
     }
   ]
 }`
@@ -146,7 +183,7 @@ func TestConfigLoad(t *testing.T) {
 	testCases := []struct {
 		Name           string
 		Filepath       string
-		ExpectedConfig *config
+		ExpectedConfig *Config
 		Error          error
 	}{
 		{
@@ -161,13 +198,17 @@ func TestConfigLoad(t *testing.T) {
 		{
 			Name:     "Good config",
 			Filepath: goodConfigFile,
-			ExpectedConfig: &config{
-				STHFetchInterval: "120s",
-				MetricsAddr:      ":1971",
-				Logs: []logConfig{
-					logConfig{
-						URI: "https://birch.ct.letsencrypt.org/2018",
-						Key: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
+			ExpectedConfig: &Config{
+				MetricsAddr:        ":1971",
+				STHFetchInterval:   "120s",
+				CertSubmitInterval: "360s",
+				CertIssuerKey:      "test/issuer.key",
+				CertIssuer:         "test/issuer.pem",
+				Logs: []LogConfig{
+					{
+						URI:        "https://birch.ct.letsencrypt.org/2018",
+						Key:        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
+						SubmitCert: true,
 					},
 				},
 			},
@@ -176,7 +217,7 @@ func TestConfigLoad(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			conf := config{}
+			conf := Config{}
 			err := conf.Load(tc.Filepath)
 			if err != nil {
 				if tc.Error == nil {
