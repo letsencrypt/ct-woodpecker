@@ -45,6 +45,36 @@ func GETs(logURI string) {
 			Endpoint:       "get-entries?start=1&end=0",
 			ExpectedStatus: 400,
 		},
+		{
+			Case:           "Negative start, positive end",
+			Endpoint:       "get-entries?start=-100&end=10",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Positivestart, negative end",
+			Endpoint:       "get-entries?start=100&end=-10",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Negative start and end",
+			Endpoint:       "get-entries?start=-100&end=-10",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Floating point start",
+			Endpoint:       "get-entries?start=1.5&end=100",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Floating point end",
+			Endpoint:       "get-entries?start=1&end=100.5",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "start larger than biggest unsigned int",
+			Endpoint:       "get-entries?start=18446744073709551616&end=18446744073709551620",
+			ExpectedStatus: 400,
+		},
 
 		// 	get-sth-consistency
 		{
@@ -73,8 +103,38 @@ func GETs(logURI string) {
 			ExpectedStatus: 400,
 		},
 		{
-			Case:           "first before second",
+			Case:           "second before first",
 			Endpoint:       "get-sth-consistency?second=0&first=1",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "first negative",
+			Endpoint:       "get-sth-consistency?second=10&first=-1",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "second negative",
+			Endpoint:       "get-sth-consistency?second=-10&first=1",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "first and second negative",
+			Endpoint:       "get-sth-consistency?second=-10&first=-20",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Floating point first",
+			Endpoint:       "get-sth-consistency?second=20&first=10.5",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Floating point second",
+			Endpoint:       "get-sth-consistency?second=20.5&first=10",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "first larger than biggest unsigned int",
+			Endpoint:       "get-sth-consistency?second=18446744073709551620&first=18446744073709551616",
 			ExpectedStatus: 400,
 		},
 
@@ -100,8 +160,23 @@ func GETs(logURI string) {
 			ExpectedStatus: 400,
 		},
 		{
-			Case:           "Invalid tree_size",
+			Case:           "Zero tree_size",
 			Endpoint:       "get-proof-by-hash?tree_size=0&hash=AAAB&hash=AAAB",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Negative tree_size",
+			Endpoint:       "get-proof-by-hash?tree_size=-10&hash=AAAB&hash=AAAB",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Floating point tree_size",
+			Endpoint:       "get-proof-by-hash?tree_size=10.5&hash=AAAB&hash=AAAB",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "tree_size larger than biggest unsigned int",
+			Endpoint:       "get-proof-by-hash?tree_size=18446744073709551616&hash=AAAB&hash=AAAB",
 			ExpectedStatus: 400,
 		},
 
@@ -134,6 +209,36 @@ func GETs(logURI string) {
 		{
 			Case:           "leaf_index out of range",
 			Endpoint:       "get-entry-and-proof?tree_size=1&leaf_index=5",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Floating point leaf_index",
+			Endpoint:       "get-entry-and-proof?tree_size=100&leaf_index=5.5",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Floating point tree_size",
+			Endpoint:       "get-entry-and-proof?tree_size=100.5&leaf_index=5",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Negative leaf_index",
+			Endpoint:       "get-entry-and-proof?tree_size=100&leaf_index=-5",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Negative tree_size",
+			Endpoint:       "get-entry-and-proof?tree_size=-1&leaf_index=5",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "tree_size larger than biggest unsigned int",
+			Endpoint:       "get-entry-and-proof?tree_size=18446744073709551616&leaf_index=5",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "tree_size and leaf larger than biggest unsigned int",
+			Endpoint:       "get-entry-and-proof?tree_size=18446744073709551620&leaf_index=18446744073709551616",
 			ExpectedStatus: 400,
 		},
 	}
