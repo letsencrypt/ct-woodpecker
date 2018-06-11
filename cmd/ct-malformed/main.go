@@ -180,6 +180,12 @@ func POSTs(logURI string) {
 			ExpectedStatus: 400,
 		},
 		{
+			Case:           "Unknown key",
+			Endpoint:       "add-chain",
+			Body:           "{\"hello there\": \"general kenobi\"}",
+			ExpectedStatus: 400,
+		},
+		{
 			Case:           "Empty chain",
 			Endpoint:       "add-chain",
 			Body:           "{\"chain\":[]}",
@@ -212,6 +218,12 @@ func POSTs(logURI string) {
 			ExpectedStatus: 400,
 		},
 		{
+			Case:           "Unknown key",
+			Endpoint:       "add-pre-chain",
+			Body:           "{\"hello there\": \"general kenobi\"}",
+			ExpectedStatus: 400,
+		},
+		{
 			Case:           "Empty chain",
 			Endpoint:       "add-pre-chain",
 			Body:           "{\"chain\":[]}",
@@ -234,7 +246,7 @@ func POSTs(logURI string) {
 	hc := new(http.Client)
 
 	for _, tc := range tests {
-		fmt.Printf("%s -- %s... ", tc.Endpoint, tc.Case)
+		fmt.Printf("%s %s -- %s... ", tc.Endpoint, tc.Body, tc.Case)
 		req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/ct/v1/%s", logURI, tc.Endpoint), bytes.NewBuffer([]byte(tc.Body)))
 		if err != nil {
 			panic(err)
