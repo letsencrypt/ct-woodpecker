@@ -198,9 +198,15 @@ func POSTs(logURI string) {
 			ExpectedStatus: 400,
 		},
 		{
-			Case:           "Invalid DER",
+			Case:           "Invalid B64",
 			Endpoint:       "add-chain",
 			Body:           "{\"chain\":[\"xxx\"]}",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Invalid DER",
+			Endpoint:       "add-chain",
+			Body:           "{\"chain\":[\"aXQncyBvdmVyIGFuYWtpbiEgaSBoYXZlIHRoZSBoaWdoIGdyb3VuZCE=\"]}",
 			ExpectedStatus: 400,
 		},
 
@@ -236,9 +242,15 @@ func POSTs(logURI string) {
 			ExpectedStatus: 400,
 		},
 		{
-			Case:           "Invalid DER",
+			Case:           "Invalid B64",
 			Endpoint:       "add-pre-chain",
 			Body:           "{\"chain\":[\"xxx\"]}",
+			ExpectedStatus: 400,
+		},
+		{
+			Case:           "Invalid DER",
+			Endpoint:       "add-pre-chain",
+			Body:           "{\"chain\":[\"aXQncyBvdmVyIGFuYWtpbiEgaSBoYXZlIHRoZSBoaWdoIGdyb3VuZCE=\"]}",
 			ExpectedStatus: 400,
 		},
 	}
