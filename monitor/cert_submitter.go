@@ -158,7 +158,8 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 		{Data: cert.Raw},
 	}
 
-	// Precert submissions also need the issuer in the chain
+	// Precert submissions also need the issuer in the chain because the SCT for
+	// for precerts can contain the issuer SPKI.
 	if isPreCert {
 		chain = append(chain, ct.ASN1Cert{Data: c.certIssuer.Raw})
 	}
