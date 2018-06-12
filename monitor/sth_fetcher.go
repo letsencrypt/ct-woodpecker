@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -44,6 +45,21 @@ var sthStats *sthFetchStats = &sthFetchStats{
 		Help:    "Latency observing CT log signed tree head (STH)",
 		Buckets: internetFacingBuckets,
 	}, []string{"uri"}),
+}
+
+// FetcherOptions is a struct holding options for STH fetching.
+type FetcherOptions struct {
+	// Interval describes the duration that the monitor will sleep between
+	// fetching the STH.
+	Interval time.Duration
+}
+
+// Valid checks that the FetcherOptions interval is positive.
+func (o FetcherOptions) Valid() error {
+	if o.Interval <= 0 {
+		return errors.New("Fetcher interval must be >= 0")
+	}
+	return nil
 }
 
 // sthFetcher is a type for periodically fetching a log's STH and publishing

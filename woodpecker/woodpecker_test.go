@@ -2,9 +2,14 @@ package woodpecker
 
 import (
 	"errors"
-	"io/ioutil"
+	"log"
+	"os"
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/jmhodges/clock"
+	"github.com/letsencrypt/ct-woodpecker/test"
 )
 
 func TestLogConfigValid(t *testing.T) {
@@ -50,18 +55,21 @@ func TestLogConfigValid(t *testing.T) {
 }
 
 func TestConfigValid(t *testing.T) {
-
 	validLogs := []LogConfig{
-		{URI: "https://localhost", Key: "⚷", SubmitCert: false},
-		{URI: "https://remotehost", Key: "⚷", SubmitCert: true},
+		{URI: "https://localhost", Key: "⚷", SubmitCert: false, SubmitPreCert: false},
+		{URI: "https://remotehost", Key: "⚷", SubmitCert: true, SubmitPreCert: true},
 	}
 
 	validConfig := Config{
-		STHFetchInterval:   "2s",
-		CertSubmitInterval: "60s",
-		CertIssuerKey:      "⚷",
-		CertIssuer:         "foo",
-		Logs:               validLogs,
+		FetchConfig: &STHFetchConfig{
+			Interval: "2s",
+		},
+		SubmitConfig: &CertSubmitConfig{
+			Interval:          "60s",
+			CertIssuerKeyPath: "⚷",
+			CertIssuerPath:    "foo",
+		},
+		Logs: validLogs,
 	}
 
 	testCases := []struct {
@@ -71,49 +79,89 @@ func TestConfigValid(t *testing.T) {
 		MetricsAddr string
 	}{
 		{
-			Name: "Invalid STH Fetch Interval",
-			Config: Config{
-				STHFetchInterval: "idk, whenever you feel like it I guess?",
-			},
-		},
-		{
 			Name: "No log configs",
 			Config: Config{
-				STHFetchInterval: "2s",
+				FetchConfig: &STHFetchConfig{
+					Interval: "2s",
+				},
 			},
 		},
 		{
 			Name: "Invalid log",
 			Config: Config{
-				STHFetchInterval: "2s",
-				Logs:             []LogConfig{{}},
+				FetchConfig: &STHFetchConfig{
+					Interval: "2s",
+				},
+				Logs: []LogConfig{{}},
 			},
 		},
 		{
-			Name: "Log with submitCert, no CertSubmitInterval",
+			Name:   "No FetchConfig or SubmitConfig",
+			Config: Config{},
+		},
+		{
+			Name: "Invalid STH Fetch Interval",
 			Config: Config{
-				STHFetchInterval:   "2s",
-				CertSubmitInterval: "",
-				CertIssuerKey:      "⚷",
-				Logs:               validLogs,
+				FetchConfig: &STHFetchConfig{
+					Interval: "idk, whenever you feel like it I guess?",
+				},
 			},
 		},
 		{
-			Name: "Log with submitCert, invalid CertSubmitInterval",
+			Name: "Log with submitCert, no SubmitConfig",
 			Config: Config{
-				STHFetchInterval:   "2s",
-				CertSubmitInterval: "idk, when the mood strikes...",
-				CertIssuerKey:      "⚷",
-				Logs:               validLogs,
+				Logs: validLogs,
 			},
 		},
 		{
-			Name: "Log with submitCert, no CertIssuerKey",
+			Name: "Log with submitCert, no cert submit interval",
 			Config: Config{
-				STHFetchInterval:   "2s",
-				CertSubmitInterval: "2s",
-				CertIssuerKey:      "",
-				Logs:               validLogs,
+				SubmitConfig: &CertSubmitConfig{
+					Interval: "",
+				},
+				Logs: validLogs,
+			},
+		},
+		{
+			Name: "Log with submitCert, invalid cert submit interval",
+			Config: Config{
+				SubmitConfig: &CertSubmitConfig{
+					Interval: "idk, when the mood strikes...",
+				},
+				Logs: validLogs,
+			},
+		},
+		{
+			Name: "Log with submitCert, no cert issuer key path",
+			Config: Config{
+				SubmitConfig: &CertSubmitConfig{
+					Interval:          "2s",
+					CertIssuerKeyPath: "",
+				},
+				Logs: validLogs,
+			},
+		},
+		{
+			Name: "Log with submitCert, no cert issuer path",
+			Config: Config{
+				SubmitConfig: &CertSubmitConfig{
+					Interval:          "2s",
+					CertIssuerKeyPath: "⚷",
+				},
+				Logs: validLogs,
+			},
+		},
+		{
+			Name: "No log with submitCert, non-nil SubmitConfig",
+			Config: Config{
+				SubmitConfig: &CertSubmitConfig{
+					Interval:          "2s",
+					CertIssuerKeyPath: "⚷",
+					CertIssuerPath:    "foo",
+				},
+				Logs: []LogConfig{
+					{URI: "https://localhost", Key: "⚷", SubmitCert: false, SubmitPreCert: false},
+				},
 			},
 		},
 		{
@@ -147,26 +195,17 @@ func TestConfigValid(t *testing.T) {
 }
 
 func TestConfigLoad(t *testing.T) {
-	writeTemp := func(content, prefix string) string {
-		tmpFile, err := ioutil.TempFile("", prefix)
-		if err != nil {
-			t.Fatalf("Unable to create tempfile: %s",
-				err.Error())
-		}
-		err = ioutil.WriteFile(tmpFile.Name(), []byte(content), 0700)
-		if err != nil {
-			t.Fatalf("Unable to write tempfile contents: %s",
-				err.Error())
-		}
-		return tmpFile.Name()
-	}
 	goodConfig := `
 {
-  "sthFetchInterval": "120s",
-  "certSubmitInterval": "360s",
-  "certIssuerKey": "test/issuer.key",
-  "certIssuer": "test/issuer.pem",
   "metricsAddr": ":1971",
+  "fetchConfig": {
+    "interval": "120s"
+  },
+  "submitConfig": {
+    "interval": "360s",
+    "certIssuerKeyPath": "test/issuer.key",
+    "certIssuerPath": "test/issuer.pem"
+  },
   "logs": [
     {
       "uri": "https://birch.ct.letsencrypt.org/2018",
@@ -175,10 +214,10 @@ func TestConfigLoad(t *testing.T) {
     }
   ]
 }`
-	goodConfigFile := writeTemp(goodConfig, "good.config")
+	goodConfigFile := test.WriteTemp(t, goodConfig, "good.config")
 
 	badConfig := `{`
-	badConfigFile := writeTemp(badConfig, "bad.config")
+	badConfigFile := test.WriteTemp(t, badConfig, "bad.config")
 
 	testCases := []struct {
 		Name           string
@@ -199,11 +238,15 @@ func TestConfigLoad(t *testing.T) {
 			Name:     "Good config",
 			Filepath: goodConfigFile,
 			ExpectedConfig: &Config{
-				MetricsAddr:        ":1971",
-				STHFetchInterval:   "120s",
-				CertSubmitInterval: "360s",
-				CertIssuerKey:      "test/issuer.key",
-				CertIssuer:         "test/issuer.pem",
+				MetricsAddr: ":1971",
+				FetchConfig: &STHFetchConfig{
+					Interval: "120s",
+				},
+				SubmitConfig: &CertSubmitConfig{
+					Interval:          "360s",
+					CertIssuerKeyPath: "test/issuer.key",
+					CertIssuerPath:    "test/issuer.pem",
+				},
 				Logs: []LogConfig{
 					{
 						URI:        "https://birch.ct.letsencrypt.org/2018",
@@ -231,5 +274,80 @@ func TestConfigLoad(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestNew(t *testing.T) {
+	l := log.New(os.Stdout, "", log.LstdFlags)
+	clk := clock.NewFake()
+	clk.Set(time.Now())
+
+	// Creating a woodpecker with an invalid config should fail
+	_, err := New(Config{}, l, clk)
+	if err == nil {
+		t.Errorf("expected err calling New() with invalid config, got nil")
+	}
+
+	logKey := "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g=="
+	logs := []LogConfig{
+		{
+			URI: "http://log.on",
+			Key: logKey,
+		},
+		{
+			URI: "http://log.off",
+			Key: logKey,
+		},
+	}
+	// Creating a woodpecker without a submit config should do the expected
+	wp, err := New(Config{
+		FetchConfig: &STHFetchConfig{
+			Interval: "50s",
+		},
+		Logs: logs,
+	}, l, clk)
+	if err != nil {
+		t.Fatalf("unexpected err calling New(): %s\n", err.Error())
+	}
+	if len(wp.monitors) != len(logs) {
+		t.Fatalf("expected %d woodpecker monitors, had %d", len(logs), len(wp.monitors))
+	}
+	for _, m := range wp.monitors {
+		if m.CertSubmitter() {
+			t.Errorf("monitor was unexpectedly a cert submitter")
+		}
+		if !m.STHFetcher() {
+			t.Errorf("monitor was not a STH fetcher")
+		}
+	}
+
+	submitLogs := append(logs, LogConfig{
+		URI:        "http://drop.out",
+		Key:        logKey,
+		SubmitCert: true,
+	})
+
+	// Creating a woodpecker without a STH config should do the expected
+	wp, err = New(Config{
+		SubmitConfig: &CertSubmitConfig{
+			Interval:          "20s",
+			CertIssuerKeyPath: "../test/issuer.key",
+			CertIssuerPath:    "../test/issuer.pem",
+		},
+		Logs: submitLogs,
+	}, l, clk)
+	if err != nil {
+		t.Fatalf("unexpected err calling New(): %s\n", err.Error())
+	}
+	if len(wp.monitors) != len(submitLogs) {
+		t.Fatalf("expected %d woodpecker monitors, had %d", len(logs), len(wp.monitors))
+	}
+	for _, m := range wp.monitors {
+		if m.STHFetcher() {
+			t.Errorf("monitor was unexpectedly a STH fetcher")
+		}
+		if !m.CertSubmitter() {
+			t.Errorf("monitor was not a cert submitter")
+		}
 	}
 }

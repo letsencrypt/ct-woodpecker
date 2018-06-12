@@ -16,11 +16,17 @@ func TestObserveSTH(t *testing.T) {
 	clk := clock.NewFake()
 	clk.Set(time.Now())
 	fetchDuration := time.Second
-	certInterval := time.Second
 	logURI := "test"
 	labels := prometheus.Labels{"uri": logURI}
 
-	m, err := New(logURI, logKey, fetchDuration, certInterval, nil, nil, l, clk)
+	m, err := New(
+		MonitorOptions{
+			LogURI: logURI,
+			LogKey: logKey,
+			FetchOpts: &FetcherOptions{
+				Interval: fetchDuration,
+			},
+		}, l, clk)
 	if err != nil {
 		t.Fatalf("Unexpected error from New(): %s", err.Error())
 	}
