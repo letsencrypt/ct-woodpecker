@@ -1,3 +1,10 @@
+// Package woodpecker provides a high level monitoring process responsible for
+// monitoring one or more CT logs. Its primary use case is to be created and
+// used from the context of a command line tool and so it accepts options that
+// are relatively unprocessed (e.g. paths to certificate files, raw duration
+// strings). Individual `monitor` objects are created for each of the logs to be
+// monitored. See the `monitor` package for more information on the monitoring
+// process.
 package woodpecker
 
 import (
@@ -19,29 +26,45 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Config is a struct holding the command line configuration data
-type Config struct {
+// STHFetchConfig describes the configuration for fetching log STHs
+// periodically.
+type STHFetchConfig struct {
 	// Duration string describing the sleep period between STH fetches
-	STHFetchInterval string
+	Interval string
+}
 
-	// Address for the woodpecker metrics server
-	MetricsAddr string
-
-	// Slice of logConfigs describing logs to monitor
-	Logs []LogConfig
-
+// CertSubmitConfig describes the configuration for submitting certificates to
+// a log periodically.
+type CertSubmitConfig struct {
 	// Path to a file containing a BASE64 encoded ECDSA private key
 	// Generate with `ct-woodpecker-genissuer` from `test/`
-	CertIssuerKey string
+	CertIssuerKeyPath string
 
 	// Path to a file containing a PEM encoded issuer certificate with a public
 	// key matching the private key in CertIssuerKey
 	// Generate with `ct-woodpecker-genissuer` from `test/`
-	CertIssuer string
+	CertIssuerPath string
 
 	// Duration string describing the sleep period between submitting certificates
 	// to the monitor logs
-	CertSubmitInterval string
+	Interval string
+}
+
+// Config is a struct holding woodpecker configuration. A woodpecker can be
+// configured to fetch monitored log STHs or submit certificates periodically to
+// the monitored logs, or both.
+type Config struct {
+	// Address for the woodpecker metrics server
+	MetricsAddr string
+
+	// Configuration for STH fetching (nil if no fetching is to be done)
+	FetchConfig *STHFetchConfig
+
+	// Configuration for certificate submission (nil if no submission is to be done)
+	SubmitConfig *CertSubmitConfig
+
+	// Slice of logConfigs describing logs to monitor
+	Logs []LogConfig
 }
 
 // LogConfig describes a log to be monitored
@@ -52,6 +75,8 @@ type LogConfig struct {
 	Key string
 	// Should woodpecker submit certificates to this log every CertSubmitInterval?
 	SubmitCert bool
+	// Should woodpecker submit pre-certificates to this log every CertSubmitInterval?
+	SubmitPreCert bool
 }
 
 // Valid checks that a logConfig is valid. If the log has no URI, an invalid
@@ -71,20 +96,31 @@ func (lc LogConfig) Valid() error {
 	return nil
 }
 
-// Valid checks that a config is valid. If the STHFetchInterval is invalid,
-// or there are no logs configured, or a configured log is invalid, then an
-// error is returned. If no MetricsAddr is provided the default will be
-// populated.
+// Valid checks that a woodpecker config is valid. At least one log must be
+// configured. One of FetchConfig or SubmitConfig must be configured. If there
+// are logs with SubmitCert/SubmitPreCert then there must be a SubmitConfig.
+// Conversely, if there are no logs with SubmitCert/SubmitPreCert but there is
+// a SubmitConfig it is considered an error. All duration strings must parse as
+// valid time.Duration instances. If no MetricsAddr is provided the default will
+// be populated.
 func (c *Config) Valid() error {
-	if _, err := time.ParseDuration(c.STHFetchInterval); err != nil {
-		return err
-	}
 	if c.MetricsAddr == "" {
 		c.MetricsAddr = ":1971"
 	}
 	if len(c.Logs) < 1 {
 		return errors.New("At least one log must be configured")
 	}
+
+	if c.FetchConfig == nil && c.SubmitConfig == nil {
+		return errors.New("One of FetchConfig or SubmitConfig must not be nil")
+	}
+
+	if c.FetchConfig != nil {
+		if _, err := time.ParseDuration(c.FetchConfig.Interval); err != nil {
+			return err
+		}
+	}
+
 	var submit bool
 	for _, lc := range c.Logs {
 		if err := lc.Valid(); err != nil {
@@ -92,24 +128,32 @@ func (c *Config) Valid() error {
 		}
 		// Note that there is at least one log configured to have certificates
 		// submitted
-		if lc.SubmitCert {
+		if lc.SubmitCert || lc.SubmitPreCert {
 			submit = true
 		}
 	}
+
 	// If there is a log configured to have certificates submitted to it then the
 	// configuration must have a valid cert submit interval and a non-empty
-	// CertIssuerKey and CertIssuer
-	if submit {
-		if _, err := time.ParseDuration(c.CertSubmitInterval); err != nil {
+	// CertIssuerKeyPath and CertIssuerPath
+	if submit && c.SubmitConfig == nil {
+		return errors.New("SubmitConfig must not be nil when one or more logs has SubmitCert or SubmitPreCert set to true")
+	}
+	if !submit && c.SubmitConfig != nil {
+		return errors.New("SubmitConfig was not nil but no logs had SubmitCert or SubmitPreCert set to true")
+	}
+	if submit && c.SubmitConfig != nil {
+		if _, err := time.ParseDuration(c.SubmitConfig.Interval); err != nil {
 			return err
 		}
-		if c.CertIssuerKey == "" {
-			return errors.New("CertIssuerKey can not be empty when one or more logs has SubmitCert: true")
+		if c.SubmitConfig.CertIssuerKeyPath == "" {
+			return errors.New("CertIssuerKeyPath can not be empty")
 		}
-		if c.CertIssuer == "" {
-			return errors.New("CertIssuer can not be empty when one or more logs has SubmitCert: true")
+		if c.SubmitConfig.CertIssuerPath == "" {
+			return errors.New("CertIssuerPath can not be empty")
 		}
 	}
+
 	return nil
 }
 
@@ -134,8 +178,8 @@ func (c *Config) Load(file string) error {
 	return c.Valid()
 }
 
-// Woodpecker is a struct collecting up the things required to expose metrics
-// gathered from running monitors.
+// Woodpecker is a struct responsible for monitoring one or more CT logs. There
+// is one `monitor.Monitor` for each monitored logs.
 type Woodpecker struct {
 	logger        *log.Logger
 	clk           clock.Clock
@@ -148,50 +192,60 @@ type Woodpecker struct {
 // woodpecker it is returned. The returned Woodpecker and its monitors are not
 // started until the Start() function is called.
 func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
-	// Check the configuration is valid
 	if err := c.Valid(); err != nil {
 		return nil, err
 	}
 
-	// Create and start monitors to do the work of monitoring the provided log
-	fetchInterval, err := time.ParseDuration(c.STHFetchInterval)
-	if err != nil {
-		return nil, err
-	}
-	var certInterval time.Duration
-	if c.CertSubmitInterval != "" {
-		certInterval, err = time.ParseDuration(c.CertSubmitInterval)
+	var err error
+	var fetchInterval time.Duration
+	if c.FetchConfig != nil {
+		fetchInterval, err = time.ParseDuration(c.FetchConfig.Interval)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	var certInterval time.Duration
 	var issuerCert *x509.Certificate
-	if c.CertIssuer != "" {
-		cert, err := pki.LoadCertificate(c.CertIssuer)
+	var issuerKey *ecdsa.PrivateKey
+	if c.SubmitConfig != nil {
+		certInterval, err = time.ParseDuration(c.SubmitConfig.Interval)
+		if err != nil {
+			return nil, err
+		}
+		cert, err := pki.LoadCertificate(c.SubmitConfig.CertIssuerPath)
 		if err != nil {
 			return nil, err
 		}
 		issuerCert = cert
-	}
-	var issuerKey *ecdsa.PrivateKey
-	if c.CertIssuerKey != "" {
-		key, err := pki.LoadPrivateKey(c.CertIssuerKey)
+		key, err := pki.LoadPrivateKey(c.SubmitConfig.CertIssuerKeyPath)
 		if err != nil {
 			return nil, err
 		}
 		issuerKey = key
 	}
+
 	var monitors []*monitor.Monitor
 	for _, logConf := range c.Logs {
-		m, err := monitor.New(
-			logConf.URI,
-			logConf.Key,
-			fetchInterval,
-			certInterval,
-			issuerKey,
-			issuerCert,
-			logger,
-			clk)
+		opts := monitor.MonitorOptions{
+			LogURI: logConf.URI,
+			LogKey: logConf.Key,
+		}
+		if c.FetchConfig != nil {
+			opts.FetchOpts = &monitor.FetcherOptions{
+				Interval: fetchInterval,
+			}
+		}
+		if c.SubmitConfig != nil {
+			opts.SubmitOpts = &monitor.SubmitterOptions{
+				Interval:      certInterval,
+				IssuerCert:    issuerCert,
+				IssuerKey:     issuerKey,
+				SubmitPreCert: logConf.SubmitPreCert,
+				SubmitCert:    logConf.SubmitCert,
+			}
+		}
+		m, err := monitor.New(opts, logger, clk)
 		if err != nil {
 			return nil, err
 		}
