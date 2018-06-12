@@ -48,8 +48,7 @@ type MonitorOptions struct {
 
 // Valid enforces that a MonitorOptions instance is valid. There must be
 // a non-empty LogURI and LogKey. One of FetchOpts or SubmitOpts must not be
-// non-nil and valid. If the FetchOpts are not nil, they must be valid. If the
-// SubmitOpts are not nil, they must be valid.
+// non-nil and valid.
 func (conf MonitorOptions) Valid() error {
 	if conf.LogURI == "" {
 		return errors.New("LogURI must not be empty")
