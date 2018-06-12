@@ -1,6 +1,7 @@
 package test
 
 import (
+	"io"
 	"io/ioutil"
 	"testing"
 )
@@ -14,7 +15,7 @@ func WriteTemp(t *testing.T, contents, prefix string) string {
 		t.Fatalf("Unable to create tempfile: %s",
 			err.Error())
 	}
-	err = ioutil.WriteFile(tmpFile.Name(), []byte(contents), 0700)
+	_, err = io.WriteString(tmpFile, contents)
 	if err != nil {
 		t.Fatalf("Unable to write tempfile contents: %s",
 			err.Error())
