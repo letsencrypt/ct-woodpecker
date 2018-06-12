@@ -48,7 +48,7 @@ var (
 )
 
 // SubmitterOptions is a struct holding options related to issuing and
-// submitting certificates to the monitored log peridoically.
+// submitting certificates to the monitored log periodically.
 type SubmitterOptions struct {
 	// Interval describes the duration that the monitor will sleep between
 	// submitting certificates to the monitored log.
