@@ -29,25 +29,31 @@ import (
 // STHFetchConfig describes the configuration for fetching log STHs
 // periodically.
 type STHFetchConfig struct {
-	// Duration string describing the sleep period between STH fetches
+	// Interval is a duration string describing the sleep period between STH fetches
 	Interval string
+	// Timeout is a duration string describing the timeout for STH fetches
+	Timeout string
 }
 
 // CertSubmitConfig describes the configuration for submitting certificates to
 // a log periodically.
 type CertSubmitConfig struct {
-	// Path to a file containing a BASE64 encoded ECDSA private key
+	// CertIssuerKeyPath is a path to a file containing a BASE64 encoded ECDSA
+	// private key
 	// Generate with `ct-woodpecker-genissuer` from `test/`
 	CertIssuerKeyPath string
 
-	// Path to a file containing a PEM encoded issuer certificate with a public
-	// key matching the private key in CertIssuerKey
+	// CertIssuerPath is a path to a file containing a PEM encoded issuer
+	// certificate with a public key matching the private key in CertIssuerKey
 	// Generate with `ct-woodpecker-genissuer` from `test/`
 	CertIssuerPath string
 
-	// Duration string describing the sleep period between submitting certificates
-	// to the monitor logs
+	// Interval is a duration string describing the sleep period between
+	// submitting certificates to the monitor logs
 	Interval string
+	// Timeout is a duration string describing the timeout for precert/cert
+	// submissions
+	Timeout string
 }
 
 // Config is a struct holding woodpecker configuration. A woodpecker can be
@@ -198,18 +204,28 @@ func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 
 	var err error
 	var fetchInterval time.Duration
+	var fetchTimeout time.Duration
 	if c.FetchConfig != nil {
 		fetchInterval, err = time.ParseDuration(c.FetchConfig.Interval)
+		if err != nil {
+			return nil, err
+		}
+		fetchTimeout, err = time.ParseDuration(c.FetchConfig.Timeout)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	var certInterval time.Duration
+	var certTimeout time.Duration
 	var issuerCert *x509.Certificate
 	var issuerKey *ecdsa.PrivateKey
 	if c.SubmitConfig != nil {
 		certInterval, err = time.ParseDuration(c.SubmitConfig.Interval)
+		if err != nil {
+			return nil, err
+		}
+		certTimeout, err = time.ParseDuration(c.SubmitConfig.Timeout)
 		if err != nil {
 			return nil, err
 		}
@@ -234,11 +250,13 @@ func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 		if c.FetchConfig != nil {
 			opts.FetchOpts = &monitor.FetcherOptions{
 				Interval: fetchInterval,
+				Timeout:  fetchTimeout,
 			}
 		}
 		if c.SubmitConfig != nil {
 			opts.SubmitOpts = &monitor.SubmitterOptions{
 				Interval:      certInterval,
+				Timeout:       certTimeout,
 				IssuerCert:    issuerCert,
 				IssuerKey:     issuerKey,
 				SubmitPreCert: logConf.SubmitPreCert,

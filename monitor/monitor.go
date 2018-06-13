@@ -131,6 +131,7 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 			client:           client,
 			logURI:           opts.LogURI,
 			sthFetchInterval: opts.FetchOpts.Interval,
+			sthTimeout:       opts.FetchOpts.Timeout,
 		}
 	}
 
@@ -142,6 +143,7 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 			client:             client,
 			logURI:             opts.LogURI,
 			certSubmitInterval: opts.SubmitOpts.Interval,
+			certSubmitTimeout:  opts.SubmitOpts.Timeout,
 			certIssuer:         opts.SubmitOpts.IssuerCert,
 			certIssuerKey:      opts.SubmitOpts.IssuerKey,
 			submitPreCert:      opts.SubmitOpts.SubmitPreCert,

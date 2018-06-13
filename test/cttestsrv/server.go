@@ -209,9 +209,9 @@ func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	is.sleep()
 	// Track that an STH was fetched
 	atomic.AddInt64(&is.sthFetches, 1)
-	is.sleep()
 
 	is.RLock()
 	defer is.RUnlock()

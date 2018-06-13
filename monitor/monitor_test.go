@@ -43,6 +43,7 @@ func TestNew(t *testing.T) {
 			LogKey: logKey,
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
+				Timeout:  time.Second,
 			},
 		}, l, clk)
 	if err != nil {
@@ -97,6 +98,7 @@ func TestNew(t *testing.T) {
 			LogURI: logURI,
 			LogKey: logKey,
 			SubmitOpts: &SubmitterOptions{
+				Timeout:       time.Second,
 				Interval:      fetchDuration,
 				IssuerKey:     key,
 				IssuerCert:    cert,
