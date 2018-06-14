@@ -81,16 +81,13 @@ func woodpeckerRun(conf woodpecker.Config, duration time.Duration) (string, stri
 
 	// Start the monitoring process
 	woodpecker.Run()
+	defer woodpecker.Stop()
 
 	// Sleep for the requested amount of time
 	time.Sleep(duration)
 
 	// Collect metrics from the woodpecker instance while it is still running
-	metricsData := getWoodpeckerMetrics("http://localhost:1971")
-
-	woodpecker.Stop()
-
-	return out.String(), metricsData, nil
+	return out.String(), getWoodpeckerMetrics("http://localhost:1971"), nil
 }
 
 // testServers creates & starts a number of CT test servers based on the
@@ -99,6 +96,7 @@ func woodpeckerRun(conf woodpecker.Config, duration time.Duration) (string, stri
 // servers.
 func testServers(personalities []cttestsrv.Personality) ([]*cttestsrv.IntegrationSrv, func()) {
 	var servers []*cttestsrv.IntegrationSrv
+	fmt.Printf("Starting %d test servers\n", len(personalities))
 	for _, p := range personalities {
 		logger := log.New(os.Stdout, fmt.Sprintf("ct-test-srv %q ", p.Addr), log.LstdFlags)
 		srv, err := cttestsrv.NewServer(p, logger)
@@ -122,6 +120,7 @@ func testServers(personalities []cttestsrv.Personality) ([]*cttestsrv.Integratio
 			panic(fmt.Sprintf("Timed out waiting for ct-testserver %s\n", p.Addr))
 		}
 	}
+	fmt.Printf("Test servers are ready\n")
 
 	return servers, func() {
 		for _, srv := range servers {
@@ -140,16 +139,14 @@ var (
 		Addr:    ":4500",
 		PrivKey: logKeyA,
 		LatencySchedule: []float64{
-			0.05,
-			0.08,
+			0.00,
 		},
 	}
 	personalityB = cttestsrv.Personality{
 		Addr:    ":4501",
 		PrivKey: logKeyB,
 		LatencySchedule: []float64{
-			0.08,
-			0.05,
+			0.00,
 		},
 	}
 	// defaultPersonalities is hardcoded Personality data suitable for running
@@ -183,8 +180,8 @@ func TestFetchSTHSuccess(t *testing.T) {
 		srv.SetSTH(mockSTHs[i])
 	}
 
-	// Create a CT woodpecker configuration that fetches the STH of the two test logs every 100ms
-	fetchInterval := 100 * time.Millisecond
+	// Create a CT woodpecker configuration that fetches the STH of the two test logs
+	fetchInterval := time.Millisecond * 100
 	config := woodpecker.Config{
 		MetricsAddr: ":1971",
 		FetchConfig: &woodpecker.STHFetchConfig{
@@ -201,15 +198,7 @@ func TestFetchSTHSuccess(t *testing.T) {
 	}
 	config.Logs = logConfigs
 
-	// Sleep for the right amount of time based on the fetchInterval and the
-	// number of iterations.
-	iterations := 2
-	padding := time.Millisecond * 50
-	duration := fetchInterval*time.Duration(iterations) + padding
-
-	// Run ct-woodpecker for the specified number of iterations using the above
-	// config
-	stdout, metricsData, err := woodpeckerRun(config, duration)
+	stdout, metricsData, err := woodpeckerRun(config, time.Second)
 	if err != nil {
 		t.Fatalf("woodpecker run failed: %s", err.Error())
 	}
@@ -223,11 +212,25 @@ func TestFetchSTHSuccess(t *testing.T) {
 	for i, srv := range testServers {
 		// Check how many times each log's STH was fetched by the monitor
 		sthFetches := srv.STHFetches()
-		// We expect a certain minimum number of fetches based on the iterations. If
-		// there were *more* fetches that's OK, the test probably ran a little long.
-		if sthFetches < int64(iterations+1) {
-			t.Errorf("Expected %d sth fetches for log %q, got %d",
-				(iterations + 1), srv.Addr, sthFetches)
+
+		// There should have been at least two STH fetches: One at startup, and one
+		// after the fetchInterval has elapsed.
+		if sthFetches < 2 {
+			t.Errorf("Expected 2 sth fetches for log %q, got %d",
+				srv.Addr, sthFetches)
+		}
+
+		// There should be at least two latency observations for each log
+		expectedLatencyCountRegexp := regexp.MustCompile(
+			fmt.Sprintf(`sth_latency_count{uri="http://localhost%s"} ([\d]+)`,
+				srv.Addr))
+		if matches := expectedLatencyCountRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
+			t.Errorf("Could not find expected sth_latency_count line in metrics output: \n%s\n",
+				metricsData)
+		} else if latencyCount, err := strconv.Atoi(matches[1]); err != nil {
+			t.Errorf("sth_latency_count for log %s had non-numeric value", srv.Addr)
+		} else if latencyCount < 2 {
+			t.Errorf("expected sth_latency_count > 2 for log %s, found %d", srv.Addr, latencyCount)
 		}
 
 		// Check that each log has the correct STH timestamp in the metrics output
@@ -239,32 +242,18 @@ func TestFetchSTHSuccess(t *testing.T) {
 				expectedTimestampLine, metricsData)
 		}
 
-		// Check that each log has the minimum expected STH latency count. If there
-		// were more latency submissions than expected that's OK, the test probably
-		// ran a little long.
-		expectedLatencyCountRegexp := regexp.MustCompile(
-			fmt.Sprintf(`sth_latency_count{uri="http://localhost%s"} ([\d]+)`,
-				srv.Addr))
-		expectedLatencyCount := iterations + 1
-		if matches := expectedLatencyCountRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
-			t.Errorf("Could not find expected sth_latency_count line in metrics output: \n%s\n",
-				metricsData)
-		} else if latencyCount, err := strconv.Atoi(matches[1]); err != nil {
-			t.Errorf("sth_latency_count for log %s had non-numeric value", srv.Addr)
-		} else if latencyCount < expectedLatencyCount {
-			t.Errorf("expected sth_latency_count of %d for log %s, found %d", expectedLatencyCount, srv.Addr, latencyCount)
-		}
-
-		// Check that each log has the expected STH age in the metrics output
-		expectedAge := int((time.Duration(i+1)*time.Hour + fetchInterval*time.Duration(iterations-1)).Seconds())
-		// Use a regex to match just the integer portion of the age float to allow
-		// for some fractional inprecision
-		expectedAgeRegex := regexp.MustCompile(
-			fmt.Sprintf(`sth_age{uri="http://localhost%s"} %d.[\d]+`,
-				srv.Addr, expectedAge))
-		if !expectedAgeRegex.MatchString(metricsData) {
+		// Check that each log has a minumum expected STH age in the metrics output
+		expectedMinAge := float64((time.Duration(i+1) * time.Hour).Seconds())
+		// Find the floating point age in the metrics output with a regex
+		expectedMinAgeRegex := regexp.MustCompile(
+			fmt.Sprintf(`sth_age{uri="http://localhost%s"} ((?:[0-9]*[.])?[0-9]+)`, srv.Addr))
+		if matches := expectedMinAgeRegex.FindStringSubmatch(metricsData); len(matches) != 2 {
 			t.Errorf("Could not find expected metrics line %q in metrics output: \n%s\n",
-				expectedAgeRegex.String(), metricsData)
+				expectedMinAgeRegex.String(), metricsData)
+		} else if age, err := strconv.ParseFloat(matches[1], 64); err != nil {
+			t.Errorf("sth_age metric for log %s had value %s and was not a floating point value: %s", srv.Addr, matches[1], err)
+		} else if age < expectedMinAge {
+			t.Errorf("sth_age metric for log %s had value %f expected > %f", srv.Addr, age, expectedMinAge)
 		}
 	}
 }
@@ -284,13 +273,14 @@ func TestCertSubmissionSuccess(t *testing.T) {
 		})
 	}
 
-	// Create a woodpecker Config that submits a precert and a cert every 100ms
-	submitInterval := 100 * time.Millisecond
+	// Create a woodpecker Config that submits a precert and a cert to the
+	// monitored log
+	submitInterval := time.Millisecond * 200
 	config := woodpecker.Config{
 		MetricsAddr: ":1971",
 		SubmitConfig: &woodpecker.CertSubmitConfig{
 			Interval:          submitInterval.String(),
-			Timeout:           "2s",
+			Timeout:           "500ms",
 			CertIssuerPath:    "../test/issuer.pem",
 			CertIssuerKeyPath: "../test/issuer.key",
 		},
@@ -306,12 +296,7 @@ func TestCertSubmissionSuccess(t *testing.T) {
 	}
 	config.Logs = logConfigs
 
-	// Run ct-woodpecker for the specified number of iterations using the above
-	// config
-	iterations := 2
-	padding := time.Millisecond * 90
-	duration := submitInterval*time.Duration(iterations) + padding
-	stdout, metricsData, err := woodpeckerRun(config, duration)
+	stdout, metricsData, err := woodpeckerRun(config, time.Second)
 	if err != nil {
 		t.Fatalf("woodpecker run failed: %s", err.Error())
 	}
@@ -361,27 +346,23 @@ func TestCertSubmissionSuccess(t *testing.T) {
 
 	for _, srv := range testServers {
 		// Check that each log received the minimum expected number of chain
-		// submissions. We multiply by two because the cttestsrv counts both final
-		// and precert submissions with the same counter.
-		expectedSubmissionCount := int64(iterations+1) * 2
+		// submissions. There should have been 1 submission at startup and at least
+		// 1 more submission after the submit interval elapsed.
 		submissionCount := srv.Submissions()
-		if submissionCount < expectedSubmissionCount {
-			t.Errorf("Expected test server %s to have received >= %d add-chain calls, had %d",
-				srv.Addr, expectedSubmissionCount, submissionCount)
+		if submissionCount < 2 {
+			t.Errorf("Expected test server %s to have received >= 2 add-chain calls, had %d",
+				srv.Addr, submissionCount)
 		}
 
 		// Check that each log has the minimum expected cert_submit_results with
-		// status=ok in metrics output for both precerts and cert
-		expectedSuccess := iterations + 1
-		assertResultsStat(true, "ok", srv.Addr, expectedSuccess, metricsData)
-		assertResultsStat(false, "ok", srv.Addr, expectedSuccess, metricsData)
+		// status=ok in metrics output for both precerts and cert.
+		assertResultsStat(true, "ok", srv.Addr, 2, metricsData)
+		assertResultsStat(false, "ok", srv.Addr, 2, metricsData)
 
 		// Check that each log has the minimum expected cert_submit_latency_count
-		// for both precerts and certs. If there were more latency submissions than
-		// expected that's OK, the test probably ran a little long.
-		expectedLatencyCount := iterations + 1
-		assertLatencyCount(true, srv.Addr, expectedLatencyCount, metricsData)
-		assertLatencyCount(false, srv.Addr, expectedLatencyCount, metricsData)
+		// for both precerts and certs.
+		assertLatencyCount(true, srv.Addr, 2, metricsData)
+		assertLatencyCount(false, srv.Addr, 2, metricsData)
 	}
 }
 
@@ -394,7 +375,7 @@ func TestCoordinatedSTHOmission(t *testing.T) {
 		Addr:    slowAddr,
 		PrivKey: logKeyA,
 		LatencySchedule: []float64{
-			1.0,
+			5.0,
 		},
 	}
 	// Use the slow personality and a regular fast personality together. This will
@@ -419,7 +400,7 @@ func TestCoordinatedSTHOmission(t *testing.T) {
 	// Create a CT woodpecker configuration that fetches the STH of the two test
 	// logs. The fetch config should specify an interval that is *lower* than the
 	// latency schedule from slowPersonalityA.
-	fetchInterval := 100 * time.Millisecond
+	fetchInterval := time.Millisecond * 200
 	config := woodpecker.Config{
 		MetricsAddr: ":1971",
 		FetchConfig: &woodpecker.STHFetchConfig{
@@ -436,30 +417,37 @@ func TestCoordinatedSTHOmission(t *testing.T) {
 	}
 	config.Logs = logConfigs
 
-	// We want to sleep long enough to allow two woodpecker STH fetch cycles to
-	// occur (with a little bit of padding for good measure).
-	iterations := 3
-	duration := fetchInterval * time.Duration(iterations)
-
-	// Run the woodpecker for the required amount of time
-	stdout, _, err := woodpeckerRun(config, duration)
+	stdout, _, err := woodpeckerRun(config, time.Second)
 	if err != nil {
 		t.Fatalf("woodpecker run failed: %s", err.Error())
 	}
 
-	// We expect one STH fetch per log per iteration (plus 1 at startup). If the
-	// latency of the fetch operation slows down the number of fetches made
-	// monitoring will be skewed!
-	expectedFetchLineCount := iterations + 1
+	slowCount, fastCount := 0, 0
 	for _, srv := range testServers {
 		expectedFetchLine := fmt.Sprintf(`Fetching STH for "http://localhost%s"`,
 			srv.Addr)
 		fetchLinesCount := strings.Count(stdout, expectedFetchLine)
 
-		if fetchLinesCount != expectedFetchLineCount {
-			t.Errorf("Expected %d reported sth fetches in stdout for log %q, got %d",
-				expectedFetchLineCount, srv.Addr, fetchLinesCount)
+		if srv.Addr == slowAddr {
+			slowCount = fetchLinesCount
+		} else {
+			fastCount = fetchLinesCount
 		}
+
+		// We expect that each log has two or more attempted STH fetches in the
+		// stdout: one from startup and one after the fetch interval has elapsed
+		if fetchLinesCount < 2 {
+			fmt.Printf("Stdout: \n%s\n", stdout)
+			t.Errorf("Expected 2 reported sth fetches in stdout for log %q, got %d",
+				srv.Addr, fetchLinesCount)
+		}
+	}
+
+	// We also expect both the slow and fast logs had the same number of STH fetches
+	if slowCount != fastCount {
+		t.Errorf("Expected same number of STH fetches for slow server and fast server. "+
+			"Saw %d fetches for the slow server and %d for the fast",
+			slowCount, fastCount)
 	}
 }
 
@@ -472,7 +460,7 @@ func TestCoordinatedCertOmission(t *testing.T) {
 		Addr:    slowAddr,
 		PrivKey: logKeyA,
 		LatencySchedule: []float64{
-			1.0,
+			5.0,
 		},
 	}
 	// Use the slow personality and a regular fast personality together. This will
@@ -485,12 +473,12 @@ func TestCoordinatedCertOmission(t *testing.T) {
 	// Create a CT woodpecker configuration that submits certificates to the two
 	// logs. The submit config should specify an interval that is *lower* than the
 	// latency schedule from slowPersonalityA.
-	submitInterval := 100 * time.Millisecond
+	submitInterval := time.Millisecond * 200
 	config := woodpecker.Config{
 		MetricsAddr: ":1971",
 		SubmitConfig: &woodpecker.CertSubmitConfig{
 			Interval:          submitInterval.String(),
-			Timeout:           "2s",
+			Timeout:           "500ms",
 			CertIssuerPath:    "../test/issuer.pem",
 			CertIssuerKeyPath: "../test/issuer.key",
 		},
@@ -506,39 +494,53 @@ func TestCoordinatedCertOmission(t *testing.T) {
 	}
 	config.Logs = logConfigs
 
-	// We want to sleep long enough to allow two woodpecker cert submit cycles to
-	// occur (with a little bit of padding for good measure).
-	iterations := 3
-	padding := time.Millisecond * 50
-	duration := submitInterval*time.Duration(iterations) + padding
-
-	// Run the woodpecker for the required amount of time
-	stdout, _, err := woodpeckerRun(config, duration)
+	stdout, _, err := woodpeckerRun(config, time.Second)
 	if err != nil {
 		t.Fatalf("woodpecker run failed: %s", err.Error())
 	}
 
-	// We expect one cert and one precert submission per log per iteration (plus
-	// 1 at startup). If the latency of the submit operation slows down the number
-	// of submissions made monitoring will be skewed!
-	expectedSubmitLineCount := iterations + 1
+	slowCount, fastCount := 0, 0
+
+	// We expect at least one cert and one precert submission per log (plus 1 at
+	// startup). If the latency of the submit operation slows down the number of
+	// submissions made monitoring will be skewed!
 	for _, srv := range testServers {
 		expectedPrecertLine := fmt.Sprintf(
 			`Submitting precertificate to "http://localhost%s"`,
 			srv.Addr)
 		precertLineCount := strings.Count(stdout, expectedPrecertLine)
-		if precertLineCount != expectedSubmitLineCount {
-			t.Errorf("Expected %d precertificate submissions in stdout for log %q, got %d",
-				expectedSubmitLineCount, srv.Addr, precertLineCount)
+		if precertLineCount < 2 {
+			t.Errorf("Expected 2 precertificate submissions in stdout for log %q, got %d",
+				srv.Addr, precertLineCount)
 		}
 
 		expectedCertLine := fmt.Sprintf(
 			`Submitting certificate to "http://localhost%s"`,
 			srv.Addr)
 		certLineCount := strings.Count(stdout, expectedCertLine)
-		if certLineCount != expectedSubmitLineCount {
-			t.Errorf("Expected %d certificate submissions in stdout for log %q, got %d",
-				expectedSubmitLineCount, srv.Addr, certLineCount)
+		if certLineCount < 2 {
+			t.Errorf("Expected 2 certificate submissions in stdout for log %q, got %d",
+				srv.Addr, certLineCount)
 		}
+
+		if certLineCount != precertLineCount {
+			t.Errorf("Expected same number of precerts and certs for log %q, got %d precerts and %d certs",
+				srv.Addr, precertLineCount, certLineCount)
+		}
+
+		// NOTE(@cpu): We can avoid saving the precert line count because we already
+		// checked that it is equal to the cert line count.
+		if srv.Addr == slowAddr {
+			slowCount = certLineCount
+		} else {
+			fastCount = certLineCount
+		}
+	}
+
+	// We also expect both the slow and fast logs had the same number of submissions
+	if slowCount != fastCount {
+		t.Errorf("Expected same number of cert submissions for slow server and fast server. "+
+			"Saw %d submissions for the slow server and %d for the fast",
+			slowCount, fastCount)
 	}
 }

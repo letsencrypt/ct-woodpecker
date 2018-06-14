@@ -172,11 +172,15 @@ func (is *IntegrationSrv) addChainHandler(w http.ResponseWriter, r *http.Request
 		precert = true
 	}
 
+	is.logger.Printf("%s %s request received.", is.Addr, r.URL.Path)
+	start := time.Now()
 	sct, err := is.addChain(addChainReq.Chain, precert)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	elapsed := time.Since(start)
+	is.logger.Printf("%s %s request completed %s later", is.Addr, r.URL.Path, elapsed)
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(sct)
@@ -196,8 +200,10 @@ func (is *IntegrationSrv) getSubmissionsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	is.logger.Printf("%s %s request received.", is.Addr, r.URL.Path)
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "%d", is.Submissions())
+	is.logger.Printf("%s %s request completed.", is.Addr, r.URL.Path)
 }
 
 // getSTHHandler processes GET requests for the CT get-sth endpoint. It returns
@@ -208,6 +214,9 @@ func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
+
+	is.logger.Printf("%s %s request received.", is.Addr, r.URL.Path)
+	start := time.Now()
 
 	is.sleep()
 	// Track that an STH was fetched
@@ -220,6 +229,8 @@ func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	elapsed := time.Since(start)
+	is.logger.Printf("%s %s request completed %s later", is.Addr, r.URL.Path, elapsed)
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "%s", response)

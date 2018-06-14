@@ -71,6 +71,8 @@ type sthFetcher struct {
 	logURI string
 	stats  *sthFetchStats
 
+	stopChannel chan bool
+
 	// How long to sleep between fetching the log's current STH
 	sthFetchInterval time.Duration
 	// How long to wait before giving up on an STH fetch
@@ -82,11 +84,21 @@ type sthFetcher struct {
 func (f *sthFetcher) run() {
 	go func() {
 		for {
-			go f.observeSTH()
-			f.logger.Printf("Sleeping for %s before next STH check\n", f.sthFetchInterval)
-			f.clk.Sleep(f.sthFetchInterval)
+			select {
+			case <-f.stopChannel:
+				return
+			default:
+				go f.observeSTH()
+				f.logger.Printf("Sleeping for %s before next STH check\n", f.sthFetchInterval)
+				f.clk.Sleep(f.sthFetchInterval)
+			}
 		}
 	}()
+}
+
+func (f *sthFetcher) stop() {
+	f.logger.Printf("Stopping %s sthFetcher", f.logURI)
+	f.stopChannel <- true
 }
 
 // observeSTH fetches a monitored log's signed tree head (STH). The latency of

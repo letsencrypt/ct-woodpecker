@@ -312,4 +312,7 @@ func (w *Woodpecker) Stop() {
 		w.logger.Printf("Unable to shutdown statsServer cleanly: %s\n",
 			err.Error())
 	}
+	for _, m := range w.monitors {
+		m.Stop()
+	}
 }
