@@ -13,6 +13,7 @@ import (
 	ct "github.com/google/certificate-transparency-go"
 	"github.com/jmhodges/clock"
 	"github.com/letsencrypt/ct-woodpecker/pki"
+	"github.com/letsencrypt/ct-woodpecker/storage"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -20,8 +21,9 @@ import (
 // certSubmitterStats is a type to hold the prometheus metrics used by
 // a certSubmitter
 type certSubmitterStats struct {
-	certSubmitLatency *prometheus.HistogramVec
-	certSubmitResults *prometheus.CounterVec
+	certSubmitLatency  *prometheus.HistogramVec
+	certSubmitResults  *prometheus.CounterVec
+	sctStorageFailures *promethus.CounterVec
 }
 
 var (
@@ -44,6 +46,10 @@ var (
 			Name: "cert_submit_results",
 			Help: "Count of results from submitting certificate chains to CT logs, sliced by status",
 		}, []string{"uri", "status", "precert"}),
+		sctStorageFailures: promauto.NewCounterVec(prometheus.CounterOpts{
+			Name: "sct_storage_failures",
+			Help: "Count of failures to store recieved SCTs",
+		}),
 	}
 )
 
@@ -91,6 +97,7 @@ type certSubmitter struct {
 	client monitorCTClient
 	logURI string
 	stats  *certSubmitterStats
+	db     *storage.Storage
 
 	// How long to sleep between submitting certificates to the log
 	certSubmitInterval time.Duration
@@ -186,6 +193,14 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 		c.logger.Printf("!!! Error submitting %s to %q: %s\n", certKind, c.logURI, err.Error())
 		c.stats.certSubmitResults.With(failLabels).Inc()
 		return
+	}
+
+	if c.db != nil {
+		err = c.db.AddSCT(c.logID, &storage.SCT{Raw: sct.LogID, Submitted: sct.Timestamp})
+		if err != nil {
+			c.logger.Printf("!!! Error saving SCT: %s", err)
+			c.stats.sctStorageFailures.Inc()
+		}
 	}
 
 	ts := time.Unix(0, int64(sct.Timestamp)*int64(time.Millisecond))
