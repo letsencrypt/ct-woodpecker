@@ -20,6 +20,15 @@ import (
 	"github.com/letsencrypt/ct-woodpecker/woodpecker"
 )
 
+var (
+	// root is an encoded SHA256 hash that we can jam into mock STHs
+	root ct.SHA256Hash
+)
+
+func init() {
+	_ = root.FromBase64String("ZVWlmKuutzCIAIjNuVW0kYrk69eqWbNtLX86CBMVneg=")
+}
+
 // getWoodpeckerMetrics fetches raw prometheus metrics output through the given
 // host's `/metrics` HTTP handler. The HTTP response body is returned as
 // a string. If there is an error fetching the metrics data this function will
@@ -121,38 +130,38 @@ func testServers(personalities []cttestsrv.Personality) ([]*cttestsrv.Integratio
 	}
 }
 
-// defaultPersonalities returns hardcoded Personality data suitable for running
-// two test CT log servers, one on :4500, one on :4501.
-func defaultPersonalities() []cttestsrv.Personality {
-	return []cttestsrv.Personality{
-		{
-			Addr:    ":4500",
-			PrivKey: "MHcCAQEEIOCtGlGt/WT7471dOHdfBg43uJWJoZDkZAQjWfTitcVNoAoGCCqGSM49AwEHoUQDQgAEYggOxPnPkzKBIhTacSYoIfnSL2jPugcbUKx83vFMvk5gKAz/AGe87w20riuPwEGn229hKVbEKHFB61NIqNHC3Q==",
-			LatencySchedule: []float64{
-				0.1,
-				0.5,
-			},
-		},
-		{
-			Addr:    ":4501",
-			PrivKey: "MHcCAQEEIJSCFDYXt2xCIxv+G8BCzGdUsFIQDWEjxfJDfnn9JB5loAoGCCqGSM49AwEHoUQDQgAEKtnFevaXV/kB8dmhCNZHmxKVLcHX1plaAsY9LrKilhYxdmQZiu36LvAvosTsqMVqRK9a96nC8VaxAdaHUbM8EA==",
-			LatencySchedule: []float64{
-				0.5,
-				0.1,
-			},
+const (
+	logKeyA = "MHcCAQEEIOCtGlGt/WT7471dOHdfBg43uJWJoZDkZAQjWfTitcVNoAoGCCqGSM49AwEHoUQDQgAEYggOxPnPkzKBIhTacSYoIfnSL2jPugcbUKx83vFMvk5gKAz/AGe87w20riuPwEGn229hKVbEKHFB61NIqNHC3Q=="
+	logKeyB = "MHcCAQEEIJSCFDYXt2xCIxv+G8BCzGdUsFIQDWEjxfJDfnn9JB5loAoGCCqGSM49AwEHoUQDQgAEKtnFevaXV/kB8dmhCNZHmxKVLcHX1plaAsY9LrKilhYxdmQZiu36LvAvosTsqMVqRK9a96nC8VaxAdaHUbM8EA=="
+)
+
+var (
+	personalityA = cttestsrv.Personality{
+		Addr:    ":4500",
+		PrivKey: logKeyA,
+		LatencySchedule: []float64{
+			0.05,
+			0.08,
 		},
 	}
-}
+	personalityB = cttestsrv.Personality{
+		Addr:    ":4501",
+		PrivKey: logKeyB,
+		LatencySchedule: []float64{
+			0.08,
+			0.05,
+		},
+	}
+	// defaultPersonalities is hardcoded Personality data suitable for running
+	// two low-latency test CT log servers, one on :4500, one on :4501.
+	defaultPersonalities = []cttestsrv.Personality{personalityA, personalityB}
+)
 
 // TestFetchSTHSuccess tests that a ct-woodpecker instance correctly checks the
 // STH of mock CT servers configured for success.
 func TestFetchSTHSuccess(t *testing.T) {
-	// root is an encoded SHA256 hash that we can jam into mock STHs
-	var root ct.SHA256Hash
-	_ = root.FromBase64String("ZVWlmKuutzCIAIjNuVW0kYrk69eqWbNtLX86CBMVneg=")
-
 	// Create and start some CT test servers with the default personalities
-	testServers, cleanup := testServers(defaultPersonalities())
+	testServers, cleanup := testServers(defaultPersonalities)
 	defer cleanup()
 
 	now := time.Now()
@@ -180,6 +189,7 @@ func TestFetchSTHSuccess(t *testing.T) {
 		MetricsAddr: ":1971",
 		FetchConfig: &woodpecker.STHFetchConfig{
 			Interval: fetchInterval.String(),
+			Timeout:  "200ms",
 		},
 	}
 	logConfigs := make([]woodpecker.LogConfig, len(testServers))
@@ -260,12 +270,8 @@ func TestFetchSTHSuccess(t *testing.T) {
 }
 
 func TestCertSubmissionSuccess(t *testing.T) {
-	// root is an encoded SHA256 hash that we can jam into mock STHs
-	var root ct.SHA256Hash
-	_ = root.FromBase64String("ZVWlmKuutzCIAIjNuVW0kYrk69eqWbNtLX86CBMVneg=")
-
 	// Create and start some CT test servers with the default personalities
-	testServers, cleanup := testServers(defaultPersonalities())
+	testServers, cleanup := testServers(defaultPersonalities)
 	defer cleanup()
 
 	ts := time.Now().UnixNano() / int64(time.Millisecond)
@@ -284,6 +290,7 @@ func TestCertSubmissionSuccess(t *testing.T) {
 		MetricsAddr: ":1971",
 		SubmitConfig: &woodpecker.CertSubmitConfig{
 			Interval:          submitInterval.String(),
+			Timeout:           "2s",
 			CertIssuerPath:    "../test/issuer.pem",
 			CertIssuerKeyPath: "../test/issuer.key",
 		},
@@ -359,7 +366,6 @@ func TestCertSubmissionSuccess(t *testing.T) {
 		expectedSubmissionCount := int64(iterations+1) * 2
 		submissionCount := srv.Submissions()
 		if submissionCount < expectedSubmissionCount {
-			fmt.Printf("ct-woodpecker output: \n%s\n", stdout)
 			t.Errorf("Expected test server %s to have received >= %d add-chain calls, had %d",
 				srv.Addr, expectedSubmissionCount, submissionCount)
 		}
@@ -376,5 +382,163 @@ func TestCertSubmissionSuccess(t *testing.T) {
 		expectedLatencyCount := iterations + 1
 		assertLatencyCount(true, srv.Addr, expectedLatencyCount, metricsData)
 		assertLatencyCount(false, srv.Addr, expectedLatencyCount, metricsData)
+	}
+}
+
+// TestCoordinatedSTHOmission tests that fetching the STH of a slow log does not
+// affect the number of STH fetches performed to avoid skewing metrics.
+func TestCoordinatedSTHOmission(t *testing.T) {
+	// Set up a personality that will have a large latency schedule
+	slowAddr := ":4500"
+	slowPersonalityA := cttestsrv.Personality{
+		Addr:    slowAddr,
+		PrivKey: logKeyA,
+		LatencySchedule: []float64{
+			1.0,
+		},
+	}
+	// Use the slow personality and a regular fast personality together. This will
+	// let us test that the fast personality server isn't affected by the slow
+	// one.
+	slowAndFastPersonalities := []cttestsrv.Personality{slowPersonalityA, personalityB}
+	testServers, cleanup := testServers(slowAndFastPersonalities)
+	defer cleanup()
+
+	// Generate a mock STH for each of the CT test servers
+	mockSTHs := make([]*ct.SignedTreeHead, len(testServers))
+	for i, srv := range testServers {
+		ts := time.Now().Add(-time.Hour).UnixNano() / int64(time.Millisecond)
+		mockSTHs[i] = &ct.SignedTreeHead{
+			TreeSize:       0xC0FFEE,
+			SHA256RootHash: root,
+			Timestamp:      uint64(ts),
+		}
+		srv.SetSTH(mockSTHs[i])
+	}
+
+	// Create a CT woodpecker configuration that fetches the STH of the two test
+	// logs. The fetch config should specify an interval that is *lower* than the
+	// latency schedule from slowPersonalityA.
+	fetchInterval := 100 * time.Millisecond
+	config := woodpecker.Config{
+		MetricsAddr: ":1971",
+		FetchConfig: &woodpecker.STHFetchConfig{
+			Interval: fetchInterval.String(),
+			Timeout:  "500ms",
+		},
+	}
+	logConfigs := make([]woodpecker.LogConfig, len(testServers))
+	for i, srv := range testServers {
+		logConfigs[i] = woodpecker.LogConfig{
+			URI: fmt.Sprintf("http://localhost%s", srv.Addr),
+			Key: srv.PubKey,
+		}
+	}
+	config.Logs = logConfigs
+
+	// We want to sleep long enough to allow two woodpecker STH fetch cycles to
+	// occur (with a little bit of padding for good measure).
+	iterations := 3
+	duration := fetchInterval * time.Duration(iterations)
+
+	// Run the woodpecker for the required amount of time
+	stdout, _, err := woodpeckerRun(config, duration)
+	if err != nil {
+		t.Fatalf("woodpecker run failed: %s", err.Error())
+	}
+
+	// We expect one STH fetch per log per iteration (plus 1 at startup). If the
+	// latency of the fetch operation slows down the number of fetches made
+	// monitoring will be skewed!
+	expectedFetchLineCount := iterations + 1
+	for _, srv := range testServers {
+		expectedFetchLine := fmt.Sprintf(`Fetching STH for "http://localhost%s"`,
+			srv.Addr)
+		fetchLinesCount := strings.Count(stdout, expectedFetchLine)
+
+		if fetchLinesCount != expectedFetchLineCount {
+			t.Errorf("Expected %d reported sth fetches in stdout for log %q, got %d",
+				expectedFetchLineCount, srv.Addr, fetchLinesCount)
+		}
+	}
+}
+
+// TestCoordinatedCertOmissions tests that submitting precerts/certs to a slow
+// log does not affect the number of submissions done to avoid skewing metrics.
+func TestCoordinatedCertOmission(t *testing.T) {
+	// Set up a personality that will have a large latency schedule
+	slowAddr := ":4500"
+	slowPersonalityA := cttestsrv.Personality{
+		Addr:    slowAddr,
+		PrivKey: logKeyA,
+		LatencySchedule: []float64{
+			1.0,
+		},
+	}
+	// Use the slow personality and a regular fast personality together. This will
+	// let us test that the fast personality server isn't affected by the slow
+	// one.
+	slowAndFastPersonalities := []cttestsrv.Personality{slowPersonalityA, personalityB}
+	testServers, cleanup := testServers(slowAndFastPersonalities)
+	defer cleanup()
+
+	// Create a CT woodpecker configuration that submits certificates to the two
+	// logs. The submit config should specify an interval that is *lower* than the
+	// latency schedule from slowPersonalityA.
+	submitInterval := 100 * time.Millisecond
+	config := woodpecker.Config{
+		MetricsAddr: ":1971",
+		SubmitConfig: &woodpecker.CertSubmitConfig{
+			Interval:          submitInterval.String(),
+			Timeout:           "2s",
+			CertIssuerPath:    "../test/issuer.pem",
+			CertIssuerKeyPath: "../test/issuer.key",
+		},
+	}
+	logConfigs := make([]woodpecker.LogConfig, len(testServers))
+	for i, srv := range testServers {
+		logConfigs[i] = woodpecker.LogConfig{
+			URI:           fmt.Sprintf("http://localhost%s", srv.Addr),
+			Key:           srv.PubKey,
+			SubmitPreCert: true,
+			SubmitCert:    true,
+		}
+	}
+	config.Logs = logConfigs
+
+	// We want to sleep long enough to allow two woodpecker cert submit cycles to
+	// occur (with a little bit of padding for good measure).
+	iterations := 3
+	padding := time.Millisecond * 50
+	duration := submitInterval*time.Duration(iterations) + padding
+
+	// Run the woodpecker for the required amount of time
+	stdout, _, err := woodpeckerRun(config, duration)
+	if err != nil {
+		t.Fatalf("woodpecker run failed: %s", err.Error())
+	}
+
+	// We expect one cert and one precert submission per log per iteration (plus
+	// 1 at startup). If the latency of the submit operation slows down the number
+	// of submissions made monitoring will be skewed!
+	expectedSubmitLineCount := iterations + 1
+	for _, srv := range testServers {
+		expectedPrecertLine := fmt.Sprintf(
+			`Submitting precertificate to "http://localhost%s"`,
+			srv.Addr)
+		precertLineCount := strings.Count(stdout, expectedPrecertLine)
+		if precertLineCount != expectedSubmitLineCount {
+			t.Errorf("Expected %d precertificate submissions in stdout for log %q, got %d",
+				expectedSubmitLineCount, srv.Addr, precertLineCount)
+		}
+
+		expectedCertLine := fmt.Sprintf(
+			`Submitting certificate to "http://localhost%s"`,
+			srv.Addr)
+		certLineCount := strings.Count(stdout, expectedCertLine)
+		if certLineCount != expectedSubmitLineCount {
+			t.Errorf("Expected %d certificate submissions in stdout for log %q, got %d",
+				expectedSubmitLineCount, srv.Addr, certLineCount)
+		}
 	}
 }

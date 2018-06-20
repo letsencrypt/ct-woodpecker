@@ -25,9 +25,6 @@ type certSubmitterStats struct {
 }
 
 var (
-	// submitTimeout controls how long each certificate chain submission should
-	// wait before timing out
-	submitTimeout = time.Second * 15
 	// requiredSCTFreshness indicates how fresh a timestamp in a returned SCT must
 	// be for it to be considered valid.
 	requiredSCTFreshness = time.Minute * 10
@@ -53,6 +50,9 @@ type SubmitterOptions struct {
 	// Interval describes the duration that the monitor will sleep between
 	// submitting certificates to the monitored log.
 	Interval time.Duration
+	// Timeout describes the timeout used for submitting precerts/certs to the
+	// monitored log.
+	Timeout time.Duration
 	// IssuerKey is the ECDSA private key used to sign issued certificates
 	IssuerKey *ecdsa.PrivateKey
 	// IssuerCert is the issuer certificate used to issue certificates submitted
@@ -70,6 +70,10 @@ type SubmitterOptions struct {
 func (o SubmitterOptions) Valid() error {
 	if o.Interval <= 0 {
 		return errors.New("Submitter interval must be > 0")
+	}
+
+	if o.Timeout <= 0 {
+		return errors.New("Submitter timeout must be > 0")
 	}
 
 	if o.IssuerKey == nil {
@@ -94,6 +98,8 @@ type certSubmitter struct {
 
 	// How long to sleep between submitting certificates to the log
 	certSubmitInterval time.Duration
+	// Timeout for precert/cert submissions to the log
+	certSubmitTimeout time.Duration
 	// ECDSA private key used to issue certificates to submit to the log.
 	certIssuerKey *ecdsa.PrivateKey
 	// Certificate used as the issuer for certificates submitted to the log.
@@ -120,7 +126,7 @@ func (c *certSubmitter) run() {
 // submitCertificates issues a pre-certificate and a matching certificate with
 // the certSubmitter's certIssuer/certIssuerKey. If `submitPreCert` is enabled
 // then a precert is submitted. If `submitCert` is enabled then a final cert is
-// submitted.
+// submitted. All submissions are done on their own goroutine.
 func (c *certSubmitter) submitCertificates() {
 	// a certSubmitter requires a non-nil certIssuerKey and certIssuer. If somehow
 	// was one created with nil values then panic.
@@ -135,11 +141,11 @@ func (c *certSubmitter) submitCertificates() {
 	}
 
 	if c.submitPreCert {
-		c.submitCertificate(certPair.PreCert, true)
+		go c.submitCertificate(certPair.PreCert, true)
 	}
 
 	if c.submitCert {
-		c.submitCertificate(certPair.Cert, false)
+		go c.submitCertificate(certPair.Cert, false)
 	}
 }
 
@@ -174,7 +180,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 	c.logger.Printf("Submitting %s to %q\n", certKind, c.logURI)
 
 	start := c.clk.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), submitTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), c.certSubmitTimeout)
 	defer cancel()
 	sct, err := submissionMethod(ctx, chain)
 	elapsed := c.clk.Since(start)

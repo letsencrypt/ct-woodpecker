@@ -1,13 +1,20 @@
 {
   "metricsAddr": ":1971",
-  "sthFetchInterval": "120s",
-  "certSubmitInterval": "600s",
-  "certIssuer": "test/issuer.pem",
-  "certIssuerKey": "test/issuer.key",
+  "fetchConfig": {
+    "interval": "120s",
+    "timeout": "100s"
+  },
+  "submitConfig": {
+    "interval": "600s",
+    "timeout": "500s",
+    "certIssuerKeyPath": "test/issuer.key",
+    "certIssuerPath": "test/issuer.pem"
+  },
   "logs": [
     {
       "uri": "https://birch.ct.letsencrypt.org/2018",
       "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
+      "submitPreCert": true,
       "submitCert": true
     }
   ]
