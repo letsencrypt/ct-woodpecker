@@ -217,7 +217,6 @@ func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) 
 
 	is.logger.Printf("%s %s request received.", is.Addr, r.URL.Path)
 	start := time.Now()
-
 	is.sleep()
 	// Track that an STH was fetched
 	atomic.AddInt64(&is.sthFetches, 1)
