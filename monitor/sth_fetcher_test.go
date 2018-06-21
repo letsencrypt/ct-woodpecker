@@ -25,6 +25,7 @@ func TestObserveSTH(t *testing.T) {
 			LogKey: logKey,
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
+				Timeout:  time.Second,
 			},
 		}, l, clk)
 	if err != nil {

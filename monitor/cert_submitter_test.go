@@ -45,6 +45,7 @@ func TestSubmitCertificate(t *testing.T) {
 	clk := clock.NewFake()
 	clk.Set(time.Now())
 	certInterval := time.Second
+	certTimeout := time.Millisecond * 5
 	logURI := "test"
 
 	// Create a logger backed by the safeBuffer. The log.Logger type is only safe
@@ -70,6 +71,7 @@ func TestSubmitCertificate(t *testing.T) {
 			LogKey: logKey,
 			SubmitOpts: &SubmitterOptions{
 				Interval:      certInterval,
+				Timeout:       certTimeout,
 				IssuerKey:     certIssuerKey,
 				IssuerCert:    certIssuer,
 				SubmitCert:    true,
@@ -116,6 +118,10 @@ func TestSubmitCertificate(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			m.submitter.client = tc.MockClient
 			m.submitter.submitCertificates()
+
+			// Sleep for the submission timeout to allow the async submissions to
+			// complete
+			time.Sleep(certTimeout)
 
 			// There should be 1 latency observation for each test case
 			expectedLatencyObservations := i + 1

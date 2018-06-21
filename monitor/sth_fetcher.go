@@ -11,11 +11,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-const (
-	// sthTimeout controls how long each STH fetch should wait before timing out
-	sthTimeout = time.Second * 15
-)
-
 // sthFetchStats is a type to hold the prometheus metrics used by
 // a sthFetcher
 type sthFetchStats struct {
@@ -52,12 +47,17 @@ type FetcherOptions struct {
 	// Interval describes the duration that the monitor will sleep between
 	// fetching the STH.
 	Interval time.Duration
+	// Timeout is the STH fetch timeout.
+	Timeout time.Duration
 }
 
 // Valid checks that the FetcherOptions interval is positive.
 func (o FetcherOptions) Valid() error {
 	if o.Interval <= 0 {
 		return errors.New("Fetcher interval must be >= 0")
+	}
+	if o.Timeout <= 0 {
+		return errors.New("Fetcher timeout must be >= 0")
 	}
 	return nil
 }
@@ -71,20 +71,33 @@ type sthFetcher struct {
 	logURI string
 	stats  *sthFetchStats
 
+	stopChannel chan bool
+
 	// How long to sleep between fetching the log's current STH
 	sthFetchInterval time.Duration
+	// How long to wait before giving up on an STH fetch
+	sthTimeout time.Duration
 }
 
 // Run starts the log STH fetching process by creating a goroutine that will loop
-// forever fetching the log's STH and then sleeping.
+// forever fetching the log's STH in a goroutine and then sleeping.
 func (f *sthFetcher) run() {
 	go func() {
 		for {
-			f.observeSTH()
+			select {
+			case <-f.stopChannel:
+				return
+			case <-time.After(f.sthFetchInterval):
+			}
+			go f.observeSTH()
 			f.logger.Printf("Sleeping for %s before next STH check\n", f.sthFetchInterval)
-			f.clk.Sleep(f.sthFetchInterval)
 		}
 	}()
+}
+
+func (f *sthFetcher) stop() {
+	f.logger.Printf("Stopping %s sthFetcher", f.logURI)
+	f.stopChannel <- true
 }
 
 // observeSTH fetches a monitored log's signed tree head (STH). The latency of
@@ -98,7 +111,7 @@ func (f *sthFetcher) observeSTH() {
 	f.logger.Printf("Fetching STH for %q\n", f.logURI)
 
 	start := f.clk.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), sthTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), f.sthTimeout)
 	defer cancel()
 	sth, err := f.client.GetSTH(ctx)
 	elapsed := f.clk.Since(start)

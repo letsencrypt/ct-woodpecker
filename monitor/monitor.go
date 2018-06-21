@@ -130,7 +130,9 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 			stats:            sthStats,
 			client:           client,
 			logURI:           opts.LogURI,
+			stopChannel:      make(chan bool),
 			sthFetchInterval: opts.FetchOpts.Interval,
+			sthTimeout:       opts.FetchOpts.Timeout,
 		}
 	}
 
@@ -141,7 +143,9 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 			stats:              certStats,
 			client:             client,
 			logURI:             opts.LogURI,
+			stopChannel:        make(chan bool),
 			certSubmitInterval: opts.SubmitOpts.Interval,
+			certSubmitTimeout:  opts.SubmitOpts.Timeout,
 			certIssuer:         opts.SubmitOpts.IssuerCert,
 			certIssuerKey:      opts.SubmitOpts.IssuerKey,
 			submitPreCert:      opts.SubmitOpts.SubmitPreCert,
@@ -173,5 +177,15 @@ func (m *Monitor) Run() {
 
 	if m.submitter != nil {
 		m.submitter.run()
+	}
+}
+
+func (m *Monitor) Stop() {
+	if m.fetcher != nil {
+		m.fetcher.stop()
+	}
+
+	if m.submitter != nil {
+		m.submitter.stop()
 	}
 }
