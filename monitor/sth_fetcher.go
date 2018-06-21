@@ -87,11 +87,10 @@ func (f *sthFetcher) run() {
 			select {
 			case <-f.stopChannel:
 				return
-			default:
-				go f.observeSTH()
-				f.logger.Printf("Sleeping for %s before next STH check\n", f.sthFetchInterval)
-				f.clk.Sleep(f.sthFetchInterval)
+			case <-time.After(f.sthFetchInterval):
 			}
+			go f.observeSTH()
+			f.logger.Printf("Sleeping for %s before next STH check\n", f.sthFetchInterval)
 		}
 	}()
 }

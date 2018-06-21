@@ -120,12 +120,11 @@ func (c *certSubmitter) run() {
 			select {
 			case <-c.stopChannel:
 				return
-			default:
-				c.submitCertificates()
-				c.logger.Printf("Sleeping for %s before next certificate submission\n",
-					c.certSubmitInterval)
-				c.clk.Sleep(c.certSubmitInterval)
+			case <-time.After(c.certSubmitInterval):
 			}
+			c.submitCertificates()
+			c.logger.Printf("Sleeping for %s before next certificate submission\n",
+				c.certSubmitInterval)
 		}
 	}()
 }
