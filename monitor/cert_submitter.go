@@ -96,6 +96,8 @@ type certSubmitter struct {
 	logURI string
 	stats  *certSubmitterStats
 
+	stopChannel chan bool
+
 	// How long to sleep between submitting certificates to the log
 	certSubmitInterval time.Duration
 	// Timeout for precert/cert submissions to the log
@@ -115,12 +117,21 @@ type certSubmitter struct {
 func (c *certSubmitter) run() {
 	go func() {
 		for {
+			select {
+			case <-c.stopChannel:
+				return
+			case <-time.After(c.certSubmitInterval):
+			}
 			c.submitCertificates()
 			c.logger.Printf("Sleeping for %s before next certificate submission\n",
 				c.certSubmitInterval)
-			c.clk.Sleep(c.certSubmitInterval)
 		}
 	}()
+}
+
+func (c *certSubmitter) stop() {
+	c.logger.Printf("Stopping %s certSubmitter", c.logURI)
+	c.stopChannel <- true
 }
 
 // submitCertificates issues a pre-certificate and a matching certificate with
