@@ -150,6 +150,10 @@ func (c errorClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.Signed
 	return nil, errors.New("ct-log doesn't want any prechains")
 }
 
+func (c errorClient) GetEntries(_ context.Context, _, _ int64) ([]ct.LogEntry, error) {
+	return nil, errors.New("ct-log has no entries")
+}
+
 // mockClient is a type implementing the monitorCTClient interface that always
 // returns a fixed mock STH from `GetSTH` and a mock SCT from `AddChain`
 type mockClient struct {
@@ -178,4 +182,8 @@ func (c mockClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedC
 	return &ct.SignedCertificateTimestamp{
 		Timestamp: uint64(ts),
 	}, nil
+}
+
+func (c mockClient) GetEntries(_ context.Context, _, _ int64) ([]ct.LogEntry, error) {
+	return []ct.LogEntry{}, nil
 }
