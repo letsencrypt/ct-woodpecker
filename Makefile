@@ -37,8 +37,8 @@ $(WOODPECKER_CONFIG): $(WOODPECKER_HOME) $(WOODPECKER_ISSUER) $(WOODPECKER_ISSUE
 install: $(WOODPECKER_CMD) $(WOODPECKER_CONFIG)
 	cp $(WOODPECKER_CMD) $(INSTALL_DIR)
 	cp $(WOODPECKER_SERVICE) $(SERVICE_DIR)
-	chown -R $(WOODPECKER_USER):$(WOODPECKER_USER) $(WOODPECKER_HOME)
 	-adduser --disabled-password --no-create-home --shell=/bin/false --gecos "" $(WOODPECKER_USER)
+	chown -R $(WOODPECKER_USER):$(WOODPECKER_USER) $(WOODPECKER_HOME)
 	systemctl daemon-reload
 	systemctl enable ct-woodpecker
-	systemctl start ct-woodpecker
+	systemctl restart ct-woodpecker
