@@ -18,7 +18,7 @@ WOODPECKER_DEFAULT_CONFIG := ./util/config.dist.json
 WOODPECKER_DEFAULT_ISSUER := ./test/issuer.pem
 WOODPECKER_DEFAULT_ISSUER_KEY := ./test/issuer.key
 WOODPECKER_SERVICE := ./util/ct-woodpecker.service
-WOODPECKER_POST_RECV_HOOK := ./util/post-receive.git.hook.example
+WOODPECKER_POST_RECV_HOOK := ./util/post-receive.git.hook
 
 GOCMD=go
 
