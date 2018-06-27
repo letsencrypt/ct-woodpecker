@@ -41,51 +41,50 @@ type inclusionChecker struct {
 func (ic *inclusionChecker) run() {
 	go func() {
 		for {
-			ic.checkInclusion()
+			err := ic.checkInclusion()
+			if err != nil {
+				ic.logger.Printf("!!! Checking certificate inclusion failed: %s", err)
+			}
 			ic.clk.Sleep(ic.interval)
 		}
 	}()
 }
 
-func (ic *inclusionChecker) checkInclusion() {
+func (ic *inclusionChecker) checkInclusion() error {
 	current, err := ic.db.GetIndex(ic.logID)
 	if err != nil {
-		ic.logger.Printf("!!! Failed to get current log index: %s", err)
-		return
+		return fmt.Errorf("error getting current log index: %s", err)
 	}
 
 	certs, err := ic.db.GetUnseen(ic.logID)
 	if err != nil {
-		ic.logger.Printf("!!! Failed to get unseen certificates: %s", err)
-		return
+		return fmt.Errorf("error getting unseen certificates: %s", err)
 	}
 	if len(certs) == 0 {
 		// nothing to do, don't advance the index
-		return
+		return nil
 	}
 
 	sth, err := ic.client.GetSTH(context.Background())
 	if err != nil {
-		ic.logger.Printf("!!! Failed to get STH: %s", err)
-		return
+		return fmt.Errorf("error getting STH from log: %s", err)
 	}
 	newHead, entries, err := ic.getEntries(current, int64(sth.TreeSize))
 	if err != nil {
-		ic.logger.Printf("!!! Failed to retrieve entries: %s", err)
-		return
+		return fmt.Errorf("error retrieving entries from log: %s", err)
 	}
 
 	err = ic.checkEntries(certs, entries)
 	if err != nil {
-		ic.logger.Printf("!!! Failed to check entries against unseen certificates: %s", err)
-		return
+		return fmt.Errorf("error checking retrieved entries: %s", err)
 	}
 
 	err = ic.db.UpdateIndex(ic.logID, newHead)
 	if err != nil {
-		ic.logger.Printf("!!! Failed to update current log index: %s", err)
-		return
+		return fmt.Errorf("error updating current log index: %s", err)
 	}
+
+	return nil
 }
 
 func min(a, b int64) int64 {
@@ -137,7 +136,7 @@ func (ic *inclusionChecker) checkEntries(certs []storage.SubmittedCert, entries 
 			if err != nil {
 				return fmt.Errorf("error verifying SCT signature: %s", err)
 			}
-			err = ic.db.MarkCertSeen(matching.ID, ic.clk.Now().UnixNano())
+			err = ic.db.MarkCertSeen(matching.ID, ic.clk.Now())
 			if err != nil {
 				return fmt.Errorf("error marking certificate as seen: %s", err)
 			}
@@ -145,13 +144,13 @@ func (ic *inclusionChecker) checkEntries(certs []storage.SubmittedCert, entries 
 		}
 	}
 
-	var oldest int64
+	var oldest float64
 	for _, unseen := range lookup {
-		if oldest == 0 || unseen.Timestamp < oldest {
-			oldest = unseen.Timestamp
+		if oldest == 0 || time.Since(unseen.Timestamp).Seconds() > oldest {
+			oldest = time.Since(unseen.Timestamp).Seconds()
 		}
 	}
-	oldestUnseen.Set(ic.clk.Since(time.Unix(0, oldest)).Seconds())
+	oldestUnseen.Set(oldest)
 
 	return nil
 }

@@ -91,7 +91,7 @@ func TestGetEntries(t *testing.T) {
 type malleableDB struct {
 	AddCertFunc      func(int64, *storage.SubmittedCert) error
 	GetUnseenFunc    func(int64) ([]storage.SubmittedCert, error)
-	MarkCertSeenFunc func(int, int64) error
+	MarkCertSeenFunc func(int, time.Time) error
 	GetIndexFunc     func(int64) (int64, error)
 	UpdateIndexFunc  func(int64, int64) error
 }
@@ -104,7 +104,7 @@ func (s *malleableDB) GetUnseen(logID int64) ([]storage.SubmittedCert, error) {
 	return s.GetUnseenFunc(logID)
 }
 
-func (s *malleableDB) MarkCertSeen(id int, seen int64) error {
+func (s *malleableDB) MarkCertSeen(id int, seen time.Time) error {
 	return s.MarkCertSeenFunc(id, seen)
 }
 
@@ -213,7 +213,7 @@ func TestCheckEntries(t *testing.T) {
 		Timestamp:  1234,
 		Signature:  digitallySigned,
 	})
-	mdb.MarkCertSeenFunc = func(_ int, _ int64) error {
+	mdb.MarkCertSeenFunc = func(_ int, _ time.Time) error {
 		return errors.New("nop")
 	}
 	err = ic.checkEntries([]storage.SubmittedCert{
@@ -233,7 +233,7 @@ func TestCheckEntries(t *testing.T) {
 	}
 
 	// Matching cert, correct SCT, DB storage works
-	mdb.MarkCertSeenFunc = func(_ int, _ int64) error {
+	mdb.MarkCertSeenFunc = func(_ int, _ time.Time) error {
 		return nil
 	}
 	err = ic.checkEntries([]storage.SubmittedCert{
@@ -305,19 +305,128 @@ func TestCheckEntries(t *testing.T) {
 	// Check oldest_unincorporated_cert is properly set
 	fc.Add(time.Hour)
 	err = ic.checkEntries([]storage.SubmittedCert{
-		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 2000},
-		{Cert: []byte{1, 2, 3, 4}, SCT: sct, Timestamp: 3000},
+		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: time.Time{}.Add(time.Hour)},
+		{Cert: []byte{1, 2, 3, 4}, SCT: sct, Timestamp: time.Time{}.Add(2 * time.Hour)},
 	}, []ct.LogEntry{})
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
 	var metric dto.Metric
 	_ = oldestUnseen.Write(&metric)
-	if metric.Gauge.GetValue() != 3599.999998 {
-		t.Fatalf("Unexpected oldest_unincorporated_cert value, expected: 3599.999998, got: %f", *metric.Gauge.Value)
+	if metric.Gauge.GetValue() != 9223372036.854776 {
+		t.Fatalf("Unexpected oldest_unincorporated_cert value, expected: 9223372036.854776, got: %f", *metric.Gauge.Value)
 	}
 }
 
-func TestcheckInclusion(t *testing.T) {
+func TestCheckInclusion(t *testing.T) {
+	fc := clock.NewFake()
+	k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	sv, _ := ct.NewSignatureVerifier(k.Public())
+	mdb := &malleableDB{}
+	mc := &malleableClient{}
+	ic := inclusionChecker{
+		logger:           log.New(os.Stdout, "", log.LstdFlags),
+		clk:              fc,
+		db:               mdb,
+		client:           mc,
+		signatureChecker: sv,
+	}
 
+	mdb.GetIndexFunc = func(int64) (int64, error) {
+		return 0, errors.New("bad")
+	}
+	err := ic.checkInclusion()
+	if err == nil {
+		t.Fatal("Expected checkInclusion to fail when db.GetIndex failed")
+	}
+
+	mdb.GetIndexFunc = func(int64) (int64, error) {
+		return 0, nil
+	}
+	mdb.GetUnseenFunc = func(int64) ([]storage.SubmittedCert, error) {
+		return nil, errors.New("bad")
+	}
+	err = ic.checkInclusion()
+	if err == nil {
+		t.Fatal("Expected checkInclusion to fail when db.GetUnseen failed")
+	}
+
+	mdb.GetUnseenFunc = func(int64) ([]storage.SubmittedCert, error) {
+		return []storage.SubmittedCert{}, nil
+	}
+	err = ic.checkInclusion()
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	mdb.GetUnseenFunc = func(int64) ([]storage.SubmittedCert, error) {
+		return []storage.SubmittedCert{
+			{
+				Cert: []byte{0, 1, 2},
+			},
+		}, nil
+	}
+	mc.GetSTHFunc = func(context.Context) (*ct.SignedTreeHead, error) {
+		return nil, errors.New("bad")
+	}
+	err = ic.checkInclusion()
+	if err == nil {
+		t.Fatal("Expected checkInclusion to fail when client.GetSTH failed")
+	}
+
+	mc.GetSTHFunc = func(context.Context) (*ct.SignedTreeHead, error) {
+		return &ct.SignedTreeHead{TreeSize: 1}, nil
+	}
+	mc.GetEntriesFunc = func(context.Context, int64, int64) ([]ct.LogEntry, error) {
+		return nil, errors.New("bad")
+	}
+	err = ic.checkInclusion()
+	if err == nil {
+		t.Fatal("Expected checkInclusion to fail when getEntries failed")
+	}
+
+	mc.GetEntriesFunc = func(context.Context, int64, int64) ([]ct.LogEntry, error) {
+		return []ct.LogEntry{
+			{
+				X509Cert: &ctx509.Certificate{Raw: []byte{0, 1, 2}},
+				Leaf: ct.MerkleTreeLeaf{
+					TimestampedEntry: &ct.TimestampedEntry{
+						EntryType: ct.X509LogEntryType,
+					},
+				},
+			},
+		}, nil
+	}
+	err = ic.checkInclusion()
+	if err == nil {
+		t.Fatal("Expected checkInclusion to fail when getEntries failed")
+	}
+
+	mc.GetEntriesFunc = func(context.Context, int64, int64) ([]ct.LogEntry, error) {
+		return []ct.LogEntry{
+			{
+				X509Cert: &ctx509.Certificate{Raw: []byte{1, 2, 3}},
+				Leaf: ct.MerkleTreeLeaf{
+					TimestampedEntry: &ct.TimestampedEntry{
+						EntryType: ct.X509LogEntryType,
+					},
+				},
+			},
+		}, nil
+	}
+	mdb.UpdateIndexFunc = func(int64, int64) error {
+		return errors.New("bad")
+	}
+	err = ic.checkInclusion()
+	if err == nil {
+		t.Fatal("Expected checkInclusion to fail when db.updateIndex failed")
+	}
+
+	mdb.UpdateIndexFunc = func(int64, int64) error {
+		return nil
+	}
+	err = ic.checkInclusion()
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
 }

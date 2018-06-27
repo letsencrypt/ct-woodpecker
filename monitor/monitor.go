@@ -215,8 +215,8 @@ func (m *Monitor) CertSubmitter() bool {
 	return m.submitter != nil
 }
 
-// Run starts the log monitoring process by starting the log's STH fetcher and
-// the cert submitter.
+// Run starts the log monitoring process by starting the log's STH fetcher,
+// the cert submitter, and the inclusion checker.
 func (m *Monitor) Run() {
 	if m.fetcher != nil {
 		m.fetcher.run()
@@ -224,5 +224,9 @@ func (m *Monitor) Run() {
 
 	if m.submitter != nil {
 		m.submitter.run()
+	}
+
+	if m.inclusionChecker != nil {
+		m.inclusionChecker.run()
 	}
 }
