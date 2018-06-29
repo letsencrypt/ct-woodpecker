@@ -84,13 +84,13 @@ type sthFetcher struct {
 func (f *sthFetcher) run() {
 	go func() {
 		for {
+			go f.observeSTH()
+			f.logger.Printf("Sleeping for %s before next STH check\n", f.sthFetchInterval)
 			select {
 			case <-f.stopChannel:
 				return
 			case <-time.After(f.sthFetchInterval):
 			}
-			go f.observeSTH()
-			f.logger.Printf("Sleeping for %s before next STH check\n", f.sthFetchInterval)
 		}
 	}()
 }

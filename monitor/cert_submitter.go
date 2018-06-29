@@ -117,14 +117,14 @@ type certSubmitter struct {
 func (c *certSubmitter) run() {
 	go func() {
 		for {
+			c.submitCertificates()
+			c.logger.Printf("Sleeping for %s before next certificate submission\n",
+				c.certSubmitInterval)
 			select {
 			case <-c.stopChannel:
 				return
 			case <-time.After(c.certSubmitInterval):
 			}
-			c.submitCertificates()
-			c.logger.Printf("Sleeping for %s before next certificate submission\n",
-				c.certSubmitInterval)
 		}
 	}()
 }
