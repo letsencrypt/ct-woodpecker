@@ -28,6 +28,7 @@ type monitorCTClient interface {
 	GetSTH(context.Context) (*ct.SignedTreeHead, error)
 	AddChain(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
 	AddPreChain(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
+	GetSTHConsistency(context.Context, uint64, uint64) ([][]byte, error)
 }
 
 // MonitorOptions is a struct for holding monitor configuration options
@@ -124,16 +125,13 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 	}
 
 	if opts.FetchOpts != nil {
-		m.fetcher = &sthFetcher{
-			logger:           logger,
-			clk:              clk,
-			stats:            sthStats,
-			client:           client,
-			logURI:           opts.LogURI,
-			stopChannel:      make(chan bool),
-			sthFetchInterval: opts.FetchOpts.Interval,
-			sthTimeout:       opts.FetchOpts.Timeout,
-		}
+		m.fetcher = newSTHFetcher(
+			logger,
+			clk,
+			client,
+			opts.LogURI,
+			opts.FetchOpts.Interval,
+			opts.FetchOpts.Timeout)
 	}
 
 	if opts.SubmitOpts != nil {

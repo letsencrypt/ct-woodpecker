@@ -148,14 +148,22 @@ func (c errorClient) AddChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCer
 	return nil, errors.New("ct-log doesn't want any chains")
 }
 
+// AddPreChain mocked to always return an error
 func (c errorClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
 	return nil, errors.New("ct-log doesn't want any prechains")
 }
 
+// GetSTHConsistency mocked to always return an error
+func (c errorClient) GetSTHConsistency(_ context.Context, _ uint64, _ uint64) ([][]byte, error) {
+	return nil, errors.New("ct-log wants you to take its word that it is consistent")
+}
+
 // mockClient is a type implementing the monitorCTClient interface that always
-// returns a fixed mock STH from `GetSTH` and a mock SCT from `AddChain`
+// returns a mock STH from `GetSTH`, a mock SCT from `AddChain`, and a mock
+// proof from `GetSTHConsistency`
 type mockClient struct {
 	timestamp time.Time
+	proof     [][]byte
 }
 
 // GetSTH mocked to always return a fixed mock STH
@@ -180,4 +188,9 @@ func (c mockClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedC
 	return &ct.SignedCertificateTimestamp{
 		Timestamp: uint64(ts),
 	}, nil
+}
+
+// GetSTHConsistency mocked to always return a fixed consistency proof
+func (c mockClient) GetSTHConsistency(_ context.Context, _ uint64, _ uint64) ([][]byte, error) {
+	return c.proof, nil
 }

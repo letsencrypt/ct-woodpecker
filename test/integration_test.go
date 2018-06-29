@@ -424,7 +424,7 @@ func TestCoordinatedSTHOmission(t *testing.T) {
 
 	slowCount, fastCount := 0, 0
 	for _, srv := range testServers {
-		expectedFetchLine := fmt.Sprintf(`Fetching STH for "http://localhost%s"`,
+		expectedFetchLine := fmt.Sprintf(`sth-fetcher http://localhost%s : Fetching STH`,
 			srv.Addr)
 		fetchLinesCount := strings.Count(stdout, expectedFetchLine)
 
