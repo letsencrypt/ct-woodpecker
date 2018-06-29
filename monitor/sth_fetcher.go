@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	ct "github.com/google/certificate-transparency-go"
@@ -104,6 +105,9 @@ type sthFetcher struct {
 
 	// prevSTH is the last STH that was fetched from the log
 	prevSTH *ct.SignedTreeHead
+
+	// sthLock is a Mutex for controlling updates to prevSTH
+	sthLock sync.Mutex
 
 	// verifier is used by verifySTHConsistency to prove consistency between two
 	// STHs
@@ -210,6 +214,9 @@ func (f *sthFetcher) observeSTH() {
 
 	f.logf("STH verified. Timestamp: %s Age: %s TreeSize: %d Root Hash: %x",
 		ts, sthAge, newSTH.TreeSize, newSTH.SHA256RootHash)
+
+	f.sthLock.Lock()
+	defer f.sthLock.Unlock()
 
 	if f.prevSTH != nil {
 		go f.verifySTHConsistency(f.prevSTH, newSTH)
