@@ -202,6 +202,8 @@ func (f *sthFetcher) observeSTH() {
 	f.stats.sthLatency.With(labels).Observe(elapsed.Seconds())
 
 	if err != nil {
+		// Include both %q and %#v so that `client.RespError` instances are logged
+		// with the full error information and not just the message
 		f.logErrorf("failed to fetch STH: %q : %#v", err.Error(), err)
 		f.stats.sthFailures.With(labels).Inc()
 		return
