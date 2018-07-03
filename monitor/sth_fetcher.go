@@ -144,9 +144,8 @@ func (f *sthFetcher) logErrorf(format string, args ...interface{}) {
 	// TODO(@cpu): We should be using os.Stderr here but doing so will mean
 	// changing integration tests. See
 	// https://github.com/letsencrypt/ct-woodpecker/issues/36
-	f.logger.Printf(
-		fmt.Sprintf("[ERROR] sth-fetcher %s : %s\n", f.logURI, format),
-		args...)
+	line := fmt.Sprintf(format, args...)
+	f.logger.Print("[ERROR]", "sth-fetcher", f.logURI, ":", line)
 }
 
 // logf formats a message to write to the sthFetcher's logger prefixed to
