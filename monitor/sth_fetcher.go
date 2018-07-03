@@ -126,13 +126,14 @@ func newSTHFetcher(
 	return &sthFetcher{
 		logger:           logger,
 		clk:              clk,
-		stats:            sthStats,
 		client:           client,
 		logURI:           logURI,
-		stopChannel:      make(chan bool),
 		sthFetchInterval: sthFetchInterval,
 		sthTimeout:       sthTimeout,
-		verifier:         merkle.NewLogVerifier(rfc6962.DefaultHasher),
+
+		stats:       sthStats,
+		stopChannel: make(chan bool),
+		verifier:    merkle.NewLogVerifier(rfc6962.DefaultHasher),
 	}
 }
 
