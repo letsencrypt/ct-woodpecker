@@ -215,7 +215,7 @@ func (f *sthFetcher) observeSTH() {
 	sthAge := f.clk.Since(ts)
 	f.stats.sthAge.With(labels).Set(sthAge.Seconds())
 
-	f.logf("STH verified. Timestamp: %s Age: %s TreeSize: %d Root Hash: %x",
+	f.logf("STH signature verified. Timestamp: %s Age: %s TreeSize: %d Root Hash: %x",
 		ts, sthAge, newSTH.TreeSize, newSTH.SHA256RootHash)
 
 	f.prevSTHMu.Lock()
