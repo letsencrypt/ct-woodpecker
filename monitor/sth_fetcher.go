@@ -298,8 +298,8 @@ func (f *sthFetcher) verifySTHConsistency(firstSTH, secondSTH *ct.SignedTreeHead
 	if err != nil {
 		errorLabels := prometheus.Labels{"uri": f.logURI, "type": "failed-to-get-proof"}
 		f.stats.sthInconsistencies.With(errorLabels).Inc()
-		f.logErrorf("failed to get consistency proof %s: %q : %#v",
-			proofDescription, err.Error(), err)
+		f.logErrorf("failed to get consistency proof %s: %q : %#v - firstSTH: %#v secondSTH: %#v",
+			proofDescription, err.Error(), err, firstSTH, secondSTH)
 		return
 	}
 
