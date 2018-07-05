@@ -151,7 +151,8 @@ func (f *sthFetcher) logErrorf(format string, args ...interface{}) {
 // logf formats a message to write to the sthFetcher's logger prefixed to
 // identify the source as an sth-fetcher for a specific logURI
 func (f *sthFetcher) logf(format string, args ...interface{}) {
-	f.logger.Printf(fmt.Sprintf("sth-fetcher %s : %s\n", f.logURI, format), args...)
+	line := fmt.Sprintf(format, args)
+	f.logger.Print("sth-fetcher", f.logURI, ":", line)
 }
 
 // log writes a message to the sthFetcher's logger prefixed to identify the
