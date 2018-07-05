@@ -151,7 +151,7 @@ func (f *sthFetcher) logErrorf(format string, args ...interface{}) {
 // logf formats a message to write to the sthFetcher's logger prefixed to
 // identify the source as an sth-fetcher for a specific logURI
 func (f *sthFetcher) logf(format string, args ...interface{}) {
-	line := fmt.Sprintf(format, args)
+	line := fmt.Sprintf(format, args...)
 	f.logger.Print("sth-fetcher", f.logURI, ":", line)
 }
 
@@ -203,9 +203,7 @@ func (f *sthFetcher) observeSTH() {
 	f.stats.sthLatency.With(labels).Observe(elapsed.Seconds())
 
 	if err != nil {
-		// Include both %q and %#v so that `client.RespError` instances are logged
-		// with the full error information and not just the message
-		f.logErrorf("failed to fetch STH: %q : %#v", err.Error(), err)
+		f.logErrorf("failed to fetch STH: %s", wrapRspErr(err))
 		f.stats.sthFailures.With(labels).Inc()
 		return
 	}
@@ -298,8 +296,8 @@ func (f *sthFetcher) verifySTHConsistency(firstSTH, secondSTH *ct.SignedTreeHead
 	if err != nil {
 		errorLabels := prometheus.Labels{"uri": f.logURI, "type": "failed-to-get-proof"}
 		f.stats.sthInconsistencies.With(errorLabels).Inc()
-		f.logErrorf("failed to get consistency proof %s: %q : %#v - firstSTH: %#v secondSTH: %#v",
-			proofDescription, err.Error(), err, firstSTH, secondSTH)
+		f.logErrorf("failed to get consistency proof %s : %s : firstSTH: %#v secondSTH: %#v",
+			proofDescription, wrapRspErr(err), firstSTH, secondSTH)
 		return
 	}
 
@@ -313,8 +311,8 @@ func (f *sthFetcher) verifySTHConsistency(firstSTH, secondSTH *ct.SignedTreeHead
 		consistencyProof); err != nil {
 		errorLabels := prometheus.Labels{"uri": f.logURI, "type": "failed-to-verify-proof"}
 		f.stats.sthInconsistencies.With(errorLabels).Inc()
-		f.logErrorf("failed to verify consistency proof %s: %q : %#v",
-			proofDescription, err.Error(), err)
+		f.logErrorf("failed to verify consistency proof %s : %s",
+			proofDescription, err)
 		return
 	}
 
