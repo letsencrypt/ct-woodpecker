@@ -1,0 +1,13 @@
+[Unit]
+Description=ct-woodpecker log monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=woodpecker
+Group=woodpecker
+Type=simple
+ExecStart=/usr/local/bin/ct-woodpecker --config /etc/ct-woodpecker/config.json
+
+[Install]
+WantedBy=multi-user.target

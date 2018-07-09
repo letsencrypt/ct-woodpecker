@@ -26,6 +26,14 @@ func CountCounterVecWithLabels(counterVec *prometheus.CounterVec, labels prometh
 	return int(iom.Counter.GetValue()), nil
 }
 
+func MustCountCounterVecWithLabels(counterVec *prometheus.CounterVec, labels prometheus.Labels) int {
+	count, err := CountCounterVecWithLabels(counterVec, labels)
+	if err != nil {
+		panic(fmt.Sprintf("failed to get countervec counter: %#v", err))
+	}
+	return count
+}
+
 // GaugeValueWithLabels returns the current value with the provided labels from the
 // the GaugeVec argument, or an error if there was a problem collecting the value.
 func GaugeValueWithLabels(vecGauge *prometheus.GaugeVec, labels prometheus.Labels) (int, error) {
@@ -73,4 +81,12 @@ func CountHistogramSamplesWithLabels(histVec *prometheus.HistogramVec, labels pr
 	var iom io_prometheus_client.Metric
 	_ = m.Write(&iom)
 	return int(iom.Histogram.GetSampleCount()), nil
+}
+
+func MustCountHistogramSamplesWithLabels(histVec *prometheus.HistogramVec, labels prometheus.Labels) int {
+	count, err := CountHistogramSamplesWithLabels(histVec, labels)
+	if err != nil {
+		panic(fmt.Sprintf("failed to get histogram samples: %#v", err))
+	}
+	return count
 }

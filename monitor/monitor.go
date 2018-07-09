@@ -34,6 +34,7 @@ type monitorCTClient interface {
 	AddChain(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
 	AddPreChain(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
 	GetEntries(ctx context.Context, start, end int64) ([]ct.LogEntry, error)
+	GetSTHConsistency(context.Context, uint64, uint64) ([][]byte, error)
 }
 
 // MonitorOptions is a struct for holding monitor configuration options
@@ -143,14 +144,13 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 	}
 
 	if opts.FetchOpts != nil {
-		m.fetcher = &sthFetcher{
-			logger:           logger,
-			clk:              clk,
-			stats:            sthStats,
-			client:           client,
-			logURI:           opts.LogURI,
-			sthFetchInterval: opts.FetchOpts.Interval,
-		}
+		m.fetcher = newSTHFetcher(
+			logger,
+			clk,
+			client,
+			opts.LogURI,
+			opts.FetchOpts.Interval,
+			opts.FetchOpts.Timeout)
 	}
 
 	if opts.SubmitOpts != nil {
@@ -160,7 +160,9 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 			stats:              certStats,
 			client:             client,
 			logURI:             opts.LogURI,
+			stopChannel:        make(chan bool),
 			certSubmitInterval: opts.SubmitOpts.Interval,
+			certSubmitTimeout:  opts.SubmitOpts.Timeout,
 			certIssuer:         opts.SubmitOpts.IssuerCert,
 			certIssuerKey:      opts.SubmitOpts.IssuerKey,
 			submitPreCert:      opts.SubmitOpts.SubmitPreCert,
@@ -229,4 +231,33 @@ func (m *Monitor) Run() {
 	if m.inclusionChecker != nil {
 		m.inclusionChecker.run()
 	}
+}
+
+func (m *Monitor) Stop() {
+	if m.fetcher != nil {
+		m.fetcher.stop()
+	}
+
+	if m.submitter != nil {
+		m.submitter.stop()
+	}
+}
+
+// wrapRspErr takes an errors as input and if it is a ctClient.RspError
+// instance it is returned in a wrapped form that prints the HTTP response
+// status and body in the error message. All other error types are passed
+// through unmodified.
+func wrapRspErr(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// If it is an RspError instance, wrap it
+	if rspErr, ok := err.(ctClient.RspError); ok {
+		return fmt.Errorf("%s HTTP Response Status: %d HTTP Response Body: %q",
+			rspErr.Err, rspErr.StatusCode, string(rspErr.Body))
+	}
+
+	// If it wasn't an RspError instance, return as-is
+	return err
 }

@@ -3,12 +3,14 @@ package monitor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"testing"
 	"time"
 
 	ct "github.com/google/certificate-transparency-go"
+	ctClient "github.com/google/certificate-transparency-go/client"
 	"github.com/jmhodges/clock"
 	"github.com/letsencrypt/ct-woodpecker/pki"
 )
@@ -43,6 +45,7 @@ func TestNew(t *testing.T) {
 			LogKey: logKey,
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
+				Timeout:  time.Second,
 			},
 		}, l, clk)
 	if err != nil {
@@ -97,6 +100,7 @@ func TestNew(t *testing.T) {
 			LogURI: logURI,
 			LogKey: logKey,
 			SubmitOpts: &SubmitterOptions{
+				Timeout:       time.Second,
 				Interval:      fetchDuration,
 				IssuerKey:     key,
 				IssuerCert:    cert,
@@ -132,6 +136,56 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestWrapRspErr(t *testing.T) {
+	normalErr := errors.New("just a normal error reporting for duty")
+
+	rspErr := ctClient.RspError{
+		Err:        normalErr,
+		StatusCode: 999,
+		Body:       []byte("This is the body of a ctClient.RspError"),
+	}
+
+	testCases := []struct {
+		Name        string
+		InputErr    error
+		ExpectedErr error
+	}{
+		{
+			Name:        "nil input err",
+			InputErr:    nil,
+			ExpectedErr: nil,
+		},
+		{
+			Name:        "non-RespError input err",
+			InputErr:    normalErr,
+			ExpectedErr: normalErr,
+		},
+		{
+			Name:     "rspError input err",
+			InputErr: rspErr,
+			ExpectedErr: fmt.Errorf("%s HTTP Response Status: %d HTTP Response Body: %q",
+				normalErr.Error(), rspErr.StatusCode, string(rspErr.Body)),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			actualErr := wrapRspErr(tc.InputErr)
+			if tc.ExpectedErr == nil && actualErr != nil {
+				t.Fatalf("Expected err to be nil, was %#v", actualErr)
+			} else if tc.ExpectedErr != nil && actualErr == nil {
+				t.Fatalf("Expected err to be %#v, was nil", tc.ExpectedErr)
+			} else if tc.ExpectedErr != nil {
+				actual := actualErr.Error()
+				expected := tc.ExpectedErr.Error()
+				if actual != expected {
+					t.Errorf("Expected err %q got %q", expected, actual)
+				}
+			}
+		})
+	}
+}
+
 // errorClient is a type implementing the monitorCTClient interface with
 // `GetSTH` and `AddChain` functions that always returns an error.
 type errorClient struct{}
@@ -146,6 +200,7 @@ func (c errorClient) AddChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCer
 	return nil, errors.New("ct-log doesn't want any chains")
 }
 
+// AddPreChain mocked to always return an error
 func (c errorClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
 	return nil, errors.New("ct-log doesn't want any prechains")
 }
@@ -154,10 +209,17 @@ func (c errorClient) GetEntries(_ context.Context, _, _ int64) ([]ct.LogEntry, e
 	return nil, errors.New("ct-log has no entries")
 }
 
+// GetSTHConsistency mocked to always return an error
+func (c errorClient) GetSTHConsistency(_ context.Context, _ uint64, _ uint64) ([][]byte, error) {
+	return nil, errors.New("ct-log wants you to take its word that it is consistent")
+}
+
 // mockClient is a type implementing the monitorCTClient interface that always
-// returns a fixed mock STH from `GetSTH` and a mock SCT from `AddChain`
+// returns a mock STH from `GetSTH`, a mock SCT from `AddChain`, and a mock
+// proof from `GetSTHConsistency`
 type mockClient struct {
 	timestamp time.Time
+	proof     [][]byte
 }
 
 // GetSTH mocked to always return a fixed mock STH
@@ -186,4 +248,9 @@ func (c mockClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedC
 
 func (c mockClient) GetEntries(_ context.Context, _, _ int64) ([]ct.LogEntry, error) {
 	return []ct.LogEntry{}, nil
+}
+
+// GetSTHConsistency mocked to always return a fixed consistency proof
+func (c mockClient) GetSTHConsistency(_ context.Context, _ uint64, _ uint64) ([][]byte, error) {
+	return c.proof, nil
 }

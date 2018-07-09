@@ -63,9 +63,11 @@ func TestConfigValid(t *testing.T) {
 	validConfig := Config{
 		FetchConfig: &STHFetchConfig{
 			Interval: "2s",
+			Timeout:  "1s",
 		},
 		SubmitConfig: &CertSubmitConfig{
 			Interval:          "60s",
+			Timeout:           "2s",
 			CertIssuerKeyPath: "⚷",
 			CertIssuerPath:    "foo",
 		},
@@ -108,6 +110,15 @@ func TestConfigValid(t *testing.T) {
 			},
 		},
 		{
+			Name: "Invalid STH Timeout",
+			Config: Config{
+				FetchConfig: &STHFetchConfig{
+					Interval: "2s",
+					Timeout:  "when the time is out, time out",
+				},
+			},
+		},
+		{
 			Name: "Log with submitCert, no SubmitConfig",
 			Config: Config{
 				Logs: validLogs,
@@ -132,10 +143,20 @@ func TestConfigValid(t *testing.T) {
 			},
 		},
 		{
+			Name: "Log with submitCert, invalid cert submit timeout",
+			Config: Config{
+				SubmitConfig: &CertSubmitConfig{
+					Interval: "2s",
+					Timeout:  "aaaa",
+				},
+			},
+		},
+		{
 			Name: "Log with submitCert, no cert issuer key path",
 			Config: Config{
 				SubmitConfig: &CertSubmitConfig{
 					Interval:          "2s",
+					Timeout:           "2s",
 					CertIssuerKeyPath: "",
 				},
 				Logs: validLogs,
@@ -146,6 +167,7 @@ func TestConfigValid(t *testing.T) {
 			Config: Config{
 				SubmitConfig: &CertSubmitConfig{
 					Interval:          "2s",
+					Timeout:           "2s",
 					CertIssuerKeyPath: "⚷",
 				},
 				Logs: validLogs,
@@ -156,6 +178,7 @@ func TestConfigValid(t *testing.T) {
 			Config: Config{
 				SubmitConfig: &CertSubmitConfig{
 					Interval:          "2s",
+					Timeout:           "2s",
 					CertIssuerKeyPath: "⚷",
 					CertIssuerPath:    "foo",
 				},
@@ -199,10 +222,12 @@ func TestConfigLoad(t *testing.T) {
 {
   "metricsAddr": ":1971",
   "fetchConfig": {
-    "interval": "120s"
+    "interval": "120s",
+    "timeout": "2s"
   },
   "submitConfig": {
     "interval": "360s",
+    "timeout": "2s",
     "certIssuerKeyPath": "test/issuer.key",
     "certIssuerPath": "test/issuer.pem"
   },
@@ -241,9 +266,11 @@ func TestConfigLoad(t *testing.T) {
 				MetricsAddr: ":1971",
 				FetchConfig: &STHFetchConfig{
 					Interval: "120s",
+					Timeout:  "2s",
 				},
 				SubmitConfig: &CertSubmitConfig{
 					Interval:          "360s",
+					Timeout:           "2s",
 					CertIssuerKeyPath: "test/issuer.key",
 					CertIssuerPath:    "test/issuer.pem",
 				},
@@ -303,6 +330,7 @@ func TestNew(t *testing.T) {
 	wp, err := New(Config{
 		FetchConfig: &STHFetchConfig{
 			Interval: "50s",
+			Timeout:  "1s",
 		},
 		Logs: logs,
 	}, l, clk)
@@ -331,6 +359,7 @@ func TestNew(t *testing.T) {
 	wp, err = New(Config{
 		SubmitConfig: &CertSubmitConfig{
 			Interval:          "20s",
+			Timeout:           "2s",
 			CertIssuerKeyPath: "../test/issuer.key",
 			CertIssuerPath:    "../test/issuer.pem",
 		},

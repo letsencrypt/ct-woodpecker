@@ -7,8 +7,8 @@
   "submitConfig": {
     "interval": "600s",
     "timeout": "500s",
-    "certIssuerKeyPath": "test/issuer.key",
-    "certIssuerPath": "test/issuer.pem"
+    "certIssuerKeyPath": "/etc/ct-woodpecker/issuer.key",
+    "certIssuerPath": "/etc/ct-woodpecker/issuer.pem"
   },
   "logs": [
     {
