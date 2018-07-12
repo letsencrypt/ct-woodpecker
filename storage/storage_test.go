@@ -71,7 +71,7 @@ func TestIndexes(t *testing.T) {
 func TestCerts(t *testing.T) {
 	db := setup(t)
 
-	submitted := SubmittedCert{Cert: []byte{104, 105}, SCT: []byte{116, 104, 101, 114, 101}, Timestamp: time.Time{}}
+	submitted := SubmittedCert{Cert: []byte{104, 105}, SCT: []byte{116, 104, 101, 114, 101}, Timestamp: 0}
 	err := db.AddCert(1, &submitted)
 	if err != nil {
 		t.Fatalf("AddCert failed: %s", err)

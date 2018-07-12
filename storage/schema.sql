@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS SubmittedCerts(
     LogID BIGINT NOT NULL,
     Cert BLOB NOT NULL,
     SCT BLOB NOT NULL,
-    Timestamp DATETIME NOT NULL,
+    Timestamp BIGINT NOT NULL,
     Seen DATETIME
 );
 
