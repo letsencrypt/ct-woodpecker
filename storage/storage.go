@@ -56,7 +56,7 @@ func (s *impl) GetUnseen(logID int64) ([]SubmittedCert, error) {
 		return nil, err
 	}
 	var certs []SubmittedCert
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var cert SubmittedCert
 		if err := rows.Scan(&cert.ID, &cert.Cert, &cert.SCT, &cert.Timestamp); err != nil {
@@ -89,7 +89,7 @@ func (s *impl) GetIndex(logID int64) (int64, error) {
 		return 0, err
 	}
 	var index int64
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		if err := rows.Scan(&index); err != nil {
 			return 0, err
