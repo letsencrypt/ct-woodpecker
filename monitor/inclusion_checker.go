@@ -21,6 +21,11 @@ var oldestUnseen = promauto.NewGauge(prometheus.GaugeOpts{
 	Help: "Number of seconds since the oldest unincorporated certificate was submitted",
 })
 
+var inclusionErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "inclusion_checker_errors",
+	Help: "Number of errors encountered while attempting to check for certificate inclusion",
+}, []string{"type"})
+
 type InclusionOptions struct {
 	Interval       time.Duration
 	FetchBatchSize int64
@@ -72,11 +77,13 @@ func (ic *inclusionChecker) stop() {
 func (ic *inclusionChecker) checkInclusion() error {
 	current, err := ic.db.GetIndex(ic.logID)
 	if err != nil {
+		inclusionErrors.WithLabelValues("getIndex").Inc()
 		return fmt.Errorf("error getting current log index for %q: %s", ic.logURI, err)
 	}
 
 	certs, err := ic.db.GetUnseen(ic.logID)
 	if err != nil {
+		inclusionErrors.WithLabelValues("getUnseen").Inc()
 		return fmt.Errorf("error getting unseen certificates from %q: %s", ic.logURI, err)
 	}
 	if len(certs) == 0 {
@@ -86,20 +93,24 @@ func (ic *inclusionChecker) checkInclusion() error {
 
 	sth, err := ic.client.GetSTH(context.Background())
 	if err != nil {
+		inclusionErrors.WithLabelValues("getSTH").Inc()
 		return fmt.Errorf("error getting STH from %q: %s", ic.logURI, err)
 	}
 	newHead, entries, err := ic.getEntries(current, int64(sth.TreeSize))
 	if err != nil {
+		inclusionErrors.WithLabelValues("getEntries").Inc()
 		return fmt.Errorf("error retrieving entries from %q: %s", ic.logURI, err)
 	}
 
 	err = ic.checkEntries(certs, entries)
 	if err != nil {
+		inclusionErrors.WithLabelValues("checkEntries").Inc()
 		return fmt.Errorf("error checking retrieved entries for %q: %s", ic.logURI, err)
 	}
 
 	err = ic.db.UpdateIndex(ic.logID, newHead)
 	if err != nil {
+		inclusionErrors.WithLabelValues("updateIndex").Inc()
 		return fmt.Errorf("error updating current index for %q: %s", ic.logURI, err)
 	}
 
