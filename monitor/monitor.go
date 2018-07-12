@@ -53,7 +53,9 @@ type MonitorOptions struct {
 	// to the log periodically. It may be nil if no certificate submission is to
 	// be performed.
 	SubmitOpts *SubmitterOptions
-	// InclusionOpts asdasd
+	// InclusionOpts holds the optional InclusionOptions for checking submitted
+	// certificates for inclusion in the log. It may be nil if no certificate
+	// inclusion checks are to be performed.
 	InclusionOpts *InclusionOptions
 }
 
@@ -240,6 +242,10 @@ func (m *Monitor) Stop() {
 
 	if m.submitter != nil {
 		m.submitter.stop()
+	}
+
+	if m.inclusionChecker != nil {
+		m.inclusionChecker.stop()
 	}
 }
 

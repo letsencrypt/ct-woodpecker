@@ -222,7 +222,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 			c.stats.certStorageFailures.Inc()
 			return
 		}
-		err = c.db.AddCert(c.logID, &storage.SubmittedCert{Cert: cert.Raw, SCT: sctBytes, Timestamp: start})
+		err = c.db.AddCert(c.logID, &storage.SubmittedCert{Cert: cert.Raw, SCT: sctBytes, Timestamp: sct.Timestamp})
 		if err != nil {
 			c.logger.Printf("!!! Error saving submitted cert: %s", err)
 			c.stats.certStorageFailures.Inc()

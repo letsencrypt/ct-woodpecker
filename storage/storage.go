@@ -34,7 +34,7 @@ type SubmittedCert struct {
 	ID        int
 	Cert      []byte
 	SCT       []byte
-	Timestamp time.Time
+	Timestamp uint64
 }
 
 // AddCert adds a submitted certificate to the SubmittedCerts table

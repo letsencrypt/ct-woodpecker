@@ -31,14 +31,6 @@ func (c malleableClient) GetSTH(ctx context.Context) (*ct.SignedTreeHead, error)
 	return c.GetSTHFunc(ctx)
 }
 
-func (c malleableClient) AddChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
-	return nil, errors.New("nop")
-}
-
-func (c malleableClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
-	return nil, errors.New("nop")
-}
-
 func (c malleableClient) GetEntries(ctx context.Context, start, end int64) ([]ct.LogEntry, error) {
 	return c.GetEntriesFunc(ctx, start, end)
 }
@@ -157,7 +149,7 @@ func TestCheckEntries(t *testing.T) {
 	// Matching cert, wrong SCT
 	sct, _ := cttls.Marshal(ct.SignedCertificateTimestamp{Timestamp: 1234})
 	err = ic.checkEntries([]storage.SubmittedCert{
-		{Cert: []byte{1, 2, 3}, SCT: sct},
+		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 123},
 	}, []ct.LogEntry{
 		{
 			X509Cert: &ctx509.Certificate{Raw: []byte{1, 2, 3}},
@@ -171,7 +163,7 @@ func TestCheckEntries(t *testing.T) {
 	// Matching cert, SCT with invalid signature
 	sct, _ = cttls.Marshal(ct.SignedCertificateTimestamp{Timestamp: 1234})
 	err = ic.checkEntries([]storage.SubmittedCert{
-		{Cert: []byte{1, 2, 3}, SCT: sct},
+		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 1234},
 	}, []ct.LogEntry{
 		{
 			X509Cert: &ctx509.Certificate{Raw: []byte{1, 2, 3}},
@@ -217,7 +209,7 @@ func TestCheckEntries(t *testing.T) {
 		return errors.New("nop")
 	}
 	err = ic.checkEntries([]storage.SubmittedCert{
-		{Cert: []byte{1, 2, 3}, SCT: sct},
+		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 1234},
 	}, []ct.LogEntry{
 		{
 			X509Cert: &ctx509.Certificate{Raw: []byte{1, 2, 3}},
@@ -305,15 +297,15 @@ func TestCheckEntries(t *testing.T) {
 	// Check oldest_unincorporated_cert is properly set
 	fc.Add(time.Hour)
 	err = ic.checkEntries([]storage.SubmittedCert{
-		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: time.Time{}.Add(time.Hour)},
-		{Cert: []byte{1, 2, 3, 4}, SCT: sct, Timestamp: time.Time{}.Add(2 * time.Hour)},
+		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 100},
+		{Cert: []byte{1, 2, 3, 4}, SCT: sct, Timestamp: 200},
 	}, []ct.LogEntry{})
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
 	var metric dto.Metric
 	_ = oldestUnseen.Write(&metric)
-	if metric.Gauge.GetValue() != 9223372036.854776 {
+	if metric.Gauge.GetValue() != 3600 {
 		t.Fatalf("Unexpected oldest_unincorporated_cert value, expected: 9223372036.854776, got: %f", *metric.Gauge.Value)
 	}
 }
