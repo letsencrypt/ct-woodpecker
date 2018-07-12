@@ -272,7 +272,7 @@ func TestCheckEntries(t *testing.T) {
 		Signature:  digitallySigned,
 	})
 	err = ic.checkEntries([]storage.SubmittedCert{
-		{Cert: []byte{1, 2, 3}, SCT: sct},
+		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 1234},
 	}, []ct.LogEntry{
 		{
 			Precert: &ct.Precertificate{
@@ -295,17 +295,18 @@ func TestCheckEntries(t *testing.T) {
 	}
 
 	// Check oldest_unincorporated_cert is properly set
+	oldestUnseen.Set(0)
 	fc.Add(time.Hour)
 	err = ic.checkEntries([]storage.SubmittedCert{
-		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 100},
-		{Cert: []byte{1, 2, 3, 4}, SCT: sct, Timestamp: 200},
+		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 1234},
+		{Cert: []byte{1, 2, 3, 4}, SCT: sct, Timestamp: 1234},
 	}, []ct.LogEntry{})
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
 	var metric dto.Metric
 	_ = oldestUnseen.Write(&metric)
-	if metric.Gauge.GetValue() != 3600 {
+	if metric.Gauge.GetValue() != 3599 {
 		t.Fatalf("Unexpected oldest_unincorporated_cert value, expected: 9223372036.854776, got: %f", *metric.Gauge.Value)
 	}
 }
