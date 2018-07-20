@@ -81,7 +81,7 @@ func (s *impl) MarkCertSeen(id int, seen time.Time) error {
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("Unexpected number of rows affected, expected: 1, got: %d", res.RowsAffected)
+		return fmt.Errorf("Unexpected number of rows affected, expected: 1, got: %d", num)
 	}
 	return nil
 }
