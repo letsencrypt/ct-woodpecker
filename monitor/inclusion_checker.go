@@ -18,7 +18,7 @@ import (
 
 var oldestUnseen = promauto.NewGauge(prometheus.GaugeOpts{
 	Name: "oldest_unincorporated_cert",
-	Help: "Number of seconds since the oldest unincorporated certificate was submitted",
+	Help: "Number of seconds since the oldest SCT that we haven't matched to a log entry was received",
 })
 
 var inclusionErrors = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -141,29 +141,30 @@ func (ic *inclusionChecker) getEntries(start, end int64) (int64, []ct.LogEntry, 
 	return start, allEntries, nil
 }
 
+func mapKey(cert []byte, timestamp uint64) [32]byte {
+	content := make([]byte, len(cert)+binary.MaxVarintLen64)
+	copy(content, cert)
+	binary.PutUvarint(content[len(cert):], timestamp)
+	return sha256.Sum256(content)
+}
+
 func (ic *inclusionChecker) checkEntries(certs []storage.SubmittedCert, entries []ct.LogEntry) error {
 	// Key structure for our lookup map is as follows: SHA256 hash of the certificate
 	// body concatenated with the byte encoding of the SCT timestamp. This prevents
 	// from having duplicate keys for duplicate submissions with differing SCTs.
 	lookup := make(map[[32]byte]storage.SubmittedCert)
 	for _, cert := range certs {
-		content := make([]byte, len(cert.Cert)+binary.MaxVarintLen64)
-		copy(content, cert.Cert)
-		binary.PutUvarint(content[len(cert.Cert):], cert.Timestamp)
-		lookup[sha256.Sum256(content)] = cert
+		lookup[mapKey(cert.Cert, cert.Timestamp)] = cert
 	}
 	for _, entry := range entries {
-		var content []byte
+		var certData []byte
 		switch entry.Leaf.TimestampedEntry.EntryType {
 		case ct.X509LogEntryType:
-			content = entry.X509Cert.Raw
+			certData = entry.X509Cert.Raw
 		case ct.PrecertLogEntryType:
-			content = entry.Precert.Submitted.Data
+			certData = entry.Precert.Submitted.Data
 		}
-		timestampBuf := make([]byte, binary.MaxVarintLen64)
-		binary.PutUvarint(timestampBuf, entry.Leaf.TimestampedEntry.Timestamp)
-		content = append(content, timestampBuf...)
-		h := sha256.Sum256(content)
+		h := mapKey(certData, entry.Leaf.TimestampedEntry.Timestamp)
 		if matching, found := lookup[h]; found {
 			var sct ct.SignedCertificateTimestamp
 			_, err := tls.Unmarshal(matching.SCT, &sct)

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -72,9 +73,15 @@ func (s *impl) GetUnseen(logID int64) ([]SubmittedCert, error) {
 
 // MarkCertSeen updates the row once a log entry has been seen that matches the SCT
 func (s *impl) MarkCertSeen(id int, seen time.Time) error {
-	_, err := s.db.Exec("UPDATE SubmittedCerts SET Seen = ? WHERE ID = ?", seen, id)
+	res, err := s.db.Exec("UPDATE SubmittedCerts SET Seen = ? WHERE ID = ?", seen, id)
 	if err != nil {
 		return err
+	}
+	if num, err := res.RowsAffected(); err != nil || num != 1 {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("Unexpected number of rows affected, expected: 1, got: %d", res.RowsAffected)
 	}
 	return nil
 }

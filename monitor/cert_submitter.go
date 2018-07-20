@@ -25,7 +25,7 @@ import (
 type certSubmitterStats struct {
 	certSubmitLatency   *prometheus.HistogramVec
 	certSubmitResults   *prometheus.CounterVec
-	certStorageFailures prometheus.Counter
+	certStorageFailures *prometheus.CounterVec
 }
 
 var (
@@ -45,10 +45,10 @@ var (
 			Name: "cert_submit_results",
 			Help: "Count of results from submitting certificate chains to CT logs, sliced by status",
 		}, []string{"uri", "status", "precert"}),
-		certStorageFailures: promauto.NewCounter(prometheus.CounterOpts{
+		certStorageFailures: promauto.NewCounterVec(prometheus.CounterOpts{
 			Name: "cert_storage_failures",
 			Help: "Count of failures to store submitted certificates and their SCTs",
-		}),
+		}, []string{"type"}),
 	}
 )
 
@@ -219,13 +219,17 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 		sctBytes, err := cttls.Marshal(sct)
 		if err != nil {
 			c.logger.Printf("!!! Error serializing SCT: %s", err)
-			c.stats.certStorageFailures.Inc()
+			c.stats.certStorageFailures.WithLabelValues("marshalling").Inc()
 			return
 		}
-		err = c.db.AddCert(c.logID, &storage.SubmittedCert{Cert: cert.Raw, SCT: sctBytes, Timestamp: sct.Timestamp})
+		err = c.db.AddCert(c.logID, &storage.SubmittedCert{
+			Cert:      cert.Raw,
+			SCT:       sctBytes,
+			Timestamp: sct.Timestamp,
+		})
 		if err != nil {
 			c.logger.Printf("!!! Error saving submitted cert: %s", err)
-			c.stats.certStorageFailures.Inc()
+			c.stats.certStorageFailures.WithLabelValues("storing").Inc()
 			return
 		}
 	}
