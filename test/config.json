@@ -1,5 +1,6 @@
 {
   "metricsAddr": ":1971",
+  "dbURI": "file:storage.sqlite",
   "fetchConfig": {
     "interval": "120s",
     "timeout": "100s"
@@ -9,6 +10,11 @@
     "timeout": "500s",
     "certIssuerKeyPath": "test/issuer.key",
     "certIssuerPath": "test/issuer.pem"
+  },
+  "inclusionConfig": {
+    "interval": "630s",
+    "fetchBatchSize": 30,
+    "maxGetEntries": 30
   },
   "logs": [
     {
