@@ -5,9 +5,13 @@ package monitor
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -15,6 +19,7 @@ import (
 	ctClient "github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
 	"github.com/jmhodges/clock"
+	"github.com/letsencrypt/ct-woodpecker/storage"
 )
 
 // internetFacingBuckets are histogram buckets suitable for measuring
@@ -28,6 +33,7 @@ type monitorCTClient interface {
 	GetSTH(context.Context) (*ct.SignedTreeHead, error)
 	AddChain(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
 	AddPreChain(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
+	GetEntries(ctx context.Context, start, end int64) ([]ct.LogEntry, error)
 	GetSTHConsistency(context.Context, uint64, uint64) ([][]byte, error)
 }
 
@@ -38,6 +44,8 @@ type MonitorOptions struct {
 	// LogKey is the BASE64 encoded DER of the log's public key (No PEM header/footer).
 	LogKey string
 
+	DBURI string
+
 	// FetchOpts holds the FetcherOptions for fetching the log STH periodically.
 	// It may be nil if no STH fetching is to be performed.
 	FetchOpts *FetcherOptions
@@ -45,6 +53,10 @@ type MonitorOptions struct {
 	// to the log periodically. It may be nil if no certificate submission is to
 	// be performed.
 	SubmitOpts *SubmitterOptions
+	// InclusionOpts holds the optional InclusionOptions for checking submitted
+	// certificates for inclusion in the log. It may be nil if no certificate
+	// inclusion checks are to be performed.
+	InclusionOpts *InclusionOptions
 }
 
 // Valid enforces that a MonitorOptions instance is valid. There must be
@@ -85,8 +97,9 @@ type Monitor struct {
 	logger *log.Logger
 	clk    clock.Clock
 
-	fetcher   *sthFetcher
-	submitter *certSubmitter
+	fetcher          *sthFetcher
+	submitter        *certSubmitter
+	inclusionChecker *inclusionChecker
 }
 
 // New creates a Monitor for the given options. The monitor will not be started
@@ -119,6 +132,14 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 		return nil, err
 	}
 
+	var db storage.Storage
+	if opts.DBURI != "" {
+		db, err = storage.New(opts.DBURI)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	m := &Monitor{
 		logger: logger,
 		clk:    clk,
@@ -149,6 +170,38 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 			submitPreCert:      opts.SubmitOpts.SubmitPreCert,
 			submitCert:         opts.SubmitOpts.SubmitCert,
 		}
+		if db != nil {
+			keyHash := sha256.Sum256([]byte(opts.LogKey))
+			m.submitter.logID = big.NewInt(0).SetBytes(keyHash[:]).Int64()
+			m.submitter.db = db
+		}
+	}
+
+	if opts.InclusionOpts != nil {
+		keyHash := sha256.Sum256([]byte(opts.LogKey))
+		pkBytes, err := base64.StdEncoding.DecodeString(opts.LogKey)
+		if err != nil {
+			return nil, err
+		}
+		pk, err := x509.ParsePKIXPublicKey(pkBytes)
+		if err != nil {
+			return nil, err
+		}
+		sv, err := ct.NewSignatureVerifier(pk)
+		if err != nil {
+			return nil, err
+		}
+		m.inclusionChecker = &inclusionChecker{
+			logger:           logger,
+			client:           client,
+			clk:              clk,
+			logURI:           opts.LogURI,
+			interval:         opts.InclusionOpts.Interval,
+			db:               db,
+			signatureChecker: sv,
+			logID:            big.NewInt(0).SetBytes(keyHash[:]).Int64(),
+			batchSize:        opts.InclusionOpts.FetchBatchSize,
+		}
 	}
 
 	return m, nil
@@ -166,8 +219,8 @@ func (m *Monitor) CertSubmitter() bool {
 	return m.submitter != nil
 }
 
-// Run starts the log monitoring process by starting the log's STH fetcher and
-// the cert submitter.
+// Run starts the log monitoring process by starting the log's STH fetcher,
+// the cert submitter, and the inclusion checker.
 func (m *Monitor) Run() {
 	if m.fetcher != nil {
 		m.fetcher.run()
@@ -175,6 +228,10 @@ func (m *Monitor) Run() {
 
 	if m.submitter != nil {
 		m.submitter.run()
+	}
+
+	if m.inclusionChecker != nil {
+		m.inclusionChecker.run()
 	}
 }
 
@@ -185,6 +242,10 @@ func (m *Monitor) Stop() {
 
 	if m.submitter != nil {
 		m.submitter.stop()
+	}
+
+	if m.inclusionChecker != nil {
+		m.inclusionChecker.stop()
 	}
 }
 

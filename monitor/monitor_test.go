@@ -205,6 +205,10 @@ func (c errorClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.Signed
 	return nil, errors.New("ct-log doesn't want any prechains")
 }
 
+func (c errorClient) GetEntries(_ context.Context, _, _ int64) ([]ct.LogEntry, error) {
+	return nil, errors.New("ct-log has no entries")
+}
+
 // GetSTHConsistency mocked to always return an error
 func (c errorClient) GetSTHConsistency(_ context.Context, _ uint64, _ uint64) ([][]byte, error) {
 	return nil, errors.New("ct-log wants you to take its word that it is consistent")
@@ -240,6 +244,10 @@ func (c mockClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedC
 	return &ct.SignedCertificateTimestamp{
 		Timestamp: uint64(ts),
 	}, nil
+}
+
+func (c mockClient) GetEntries(_ context.Context, _, _ int64) ([]ct.LogEntry, error) {
+	return []ct.LogEntry{}, nil
 }
 
 // GetSTHConsistency mocked to always return a fixed consistency proof

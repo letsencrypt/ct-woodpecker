@@ -10,9 +10,12 @@ import (
 	"strconv"
 	"time"
 
-	ct "github.com/google/certificate-transparency-go"
-	"github.com/jmhodges/clock"
 	"github.com/letsencrypt/ct-woodpecker/pki"
+	"github.com/letsencrypt/ct-woodpecker/storage"
+
+	ct "github.com/google/certificate-transparency-go"
+	cttls "github.com/google/certificate-transparency-go/tls"
+	"github.com/jmhodges/clock"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -20,8 +23,9 @@ import (
 // certSubmitterStats is a type to hold the prometheus metrics used by
 // a certSubmitter
 type certSubmitterStats struct {
-	certSubmitLatency *prometheus.HistogramVec
-	certSubmitResults *prometheus.CounterVec
+	certSubmitLatency   *prometheus.HistogramVec
+	certSubmitResults   *prometheus.CounterVec
+	certStorageFailures *prometheus.CounterVec
 }
 
 var (
@@ -41,6 +45,10 @@ var (
 			Name: "cert_submit_results",
 			Help: "Count of results from submitting certificate chains to CT logs, sliced by status",
 		}, []string{"uri", "status", "precert"}),
+		certStorageFailures: promauto.NewCounterVec(prometheus.CounterOpts{
+			Name: "cert_storage_failures",
+			Help: "Count of failures to store submitted certificates and their SCTs",
+		}, []string{"type"}),
 	}
 )
 
@@ -94,7 +102,9 @@ type certSubmitter struct {
 	clk    clock.Clock
 	client monitorCTClient
 	logURI string
+	logID  int64
 	stats  *certSubmitterStats
+	db     storage.Storage
 
 	stopChannel chan bool
 
@@ -203,6 +213,25 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 		c.logger.Printf("!!! Error submitting %s to %q: %s\n", certKind, c.logURI, err.Error())
 		c.stats.certSubmitResults.With(failLabels).Inc()
 		return
+	}
+
+	if c.db != nil {
+		sctBytes, err := cttls.Marshal(sct)
+		if err != nil {
+			c.logger.Printf("!!! Error serializing SCT: %s", err)
+			c.stats.certStorageFailures.WithLabelValues("marshalling").Inc()
+			return
+		}
+		err = c.db.AddCert(c.logID, &storage.SubmittedCert{
+			Cert:      cert.Raw,
+			SCT:       sctBytes,
+			Timestamp: sct.Timestamp,
+		})
+		if err != nil {
+			c.logger.Printf("!!! Error saving submitted cert: %s", err)
+			c.stats.certStorageFailures.WithLabelValues("storing").Inc()
+			return
+		}
 	}
 
 	ts := time.Unix(0, int64(sct.Timestamp)*int64(time.Millisecond))
