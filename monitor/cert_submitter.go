@@ -216,7 +216,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 	}
 
 	if c.db != nil {
-		sctBytes, err := cttls.Marshal(sct)
+		sctBytes, err := cttls.Marshal(*sct)
 		if err != nil {
 			c.logger.Printf("!!! Error serializing SCT: %s", err)
 			c.stats.certStorageFailures.WithLabelValues("marshalling").Inc()
