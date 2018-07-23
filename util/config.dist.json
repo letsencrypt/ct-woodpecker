@@ -1,5 +1,6 @@
 {
   "metricsAddr": ":1971",
+  "dbURI": "file:/etc/ct-woodpecker/storage.sqlite",
   "fetchConfig": {
     "interval": "120s",
     "timeout": "100s"
@@ -9,6 +10,11 @@
     "timeout": "500s",
     "certIssuerKeyPath": "/etc/ct-woodpecker/issuer.key",
     "certIssuerPath": "/etc/ct-woodpecker/issuer.pem"
+  },
+  "inclusionConfig": {
+    "interval": "630s",
+    "fetchBatchSize": 30,
+    "maxGetEntries": 30
   },
   "logs": [
     {

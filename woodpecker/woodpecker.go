@@ -56,6 +56,14 @@ type CertSubmitConfig struct {
 	Timeout string
 }
 
+// InclusionCheckerConfig describes the configuration for checking submitted
+// certificates have been included in a monitored log periodically.
+type InclusionCheckerConfig struct {
+	Interval       string
+	FetchBatchSize int64
+	MaxGetEntries  int64
+}
+
 // Config is a struct holding woodpecker configuration. A woodpecker can be
 // configured to fetch monitored log STHs or submit certificates periodically to
 // the monitored logs, or both.
@@ -63,11 +71,18 @@ type Config struct {
 	// Address for the woodpecker metrics server
 	MetricsAddr string
 
+	// URI for database storage
+	DBURI string
+
 	// Configuration for STH fetching (nil if no fetching is to be done)
 	FetchConfig *STHFetchConfig
 
 	// Configuration for certificate submission (nil if no submission is to be done)
 	SubmitConfig *CertSubmitConfig
+
+	// Configuration for checking certificate inclusion (nil if no certificate
+	// inclusion checking is to be done)
+	InclusionConfig *InclusionCheckerConfig
 
 	// Slice of logConfigs describing logs to monitor
 	Logs []LogConfig
@@ -121,8 +136,18 @@ func (c *Config) Valid() error {
 		return errors.New("One of FetchConfig or SubmitConfig must not be nil")
 	}
 
+	if c.SubmitConfig == nil && c.InclusionConfig != nil {
+		return errors.New("InclusionConfig can not be nil if SubmitConfig is nil")
+	}
+
 	if c.FetchConfig != nil {
 		if _, err := time.ParseDuration(c.FetchConfig.Interval); err != nil {
+			return err
+		}
+	}
+
+	if c.InclusionConfig != nil {
+		if _, err := time.ParseDuration(c.InclusionConfig.Interval); err != nil {
 			return err
 		}
 	}
@@ -241,11 +266,20 @@ func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 		issuerKey = key
 	}
 
+	var inclusionInterval time.Duration
+	if c.InclusionConfig != nil {
+		inclusionInterval, err = time.ParseDuration(c.InclusionConfig.Interval)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var monitors []*monitor.Monitor
 	for _, logConf := range c.Logs {
 		opts := monitor.MonitorOptions{
 			LogURI: logConf.URI,
 			LogKey: logConf.Key,
+			DBURI:  c.DBURI,
 		}
 		if c.FetchConfig != nil {
 			opts.FetchOpts = &monitor.FetcherOptions{
@@ -261,6 +295,13 @@ func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 				IssuerKey:     issuerKey,
 				SubmitPreCert: logConf.SubmitPreCert,
 				SubmitCert:    logConf.SubmitCert,
+			}
+		}
+		if c.InclusionConfig != nil {
+			opts.InclusionOpts = &monitor.InclusionOptions{
+				Interval:       inclusionInterval,
+				FetchBatchSize: c.InclusionConfig.FetchBatchSize,
+				MaxGetEntries:  c.InclusionConfig.MaxGetEntries,
 			}
 		}
 		m, err := monitor.New(opts, logger, clk)

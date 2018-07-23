@@ -61,6 +61,7 @@ func TestConfigValid(t *testing.T) {
 	}
 
 	validConfig := Config{
+		DBURI: "file:foobar.db",
 		FetchConfig: &STHFetchConfig{
 			Interval: "2s",
 			Timeout:  "1s",
@@ -70,6 +71,11 @@ func TestConfigValid(t *testing.T) {
 			Timeout:           "2s",
 			CertIssuerKeyPath: "⚷",
 			CertIssuerPath:    "foo",
+		},
+		InclusionConfig: &InclusionCheckerConfig{
+			Interval:       "120s",
+			FetchBatchSize: 64,
+			MaxGetEntries:  128,
 		},
 		Logs: validLogs,
 	}
@@ -169,6 +175,34 @@ func TestConfigValid(t *testing.T) {
 					Interval:          "2s",
 					Timeout:           "2s",
 					CertIssuerKeyPath: "⚷",
+				},
+				Logs: validLogs,
+			},
+		},
+		{
+			Name: "Log with inclusionCheckerConfig no submitConfig",
+			Config: Config{
+				InclusionConfig: &InclusionCheckerConfig{
+					Interval:       "2s",
+					FetchBatchSize: 128,
+					MaxGetEntries:  256,
+				},
+				Logs: validLogs,
+			},
+		},
+		{
+			Name: "Log with inclusionCheckerConfig, invalid interval",
+			Config: Config{
+				SubmitConfig: &CertSubmitConfig{
+					Interval:          "2s",
+					Timeout:           "2s",
+					CertIssuerKeyPath: "⚷",
+					CertIssuerPath:    "foo",
+				},
+				InclusionConfig: &InclusionCheckerConfig{
+					Interval:       "pretty-quickly-i-guess?",
+					FetchBatchSize: 128,
+					MaxGetEntries:  256,
 				},
 				Logs: validLogs,
 			},
