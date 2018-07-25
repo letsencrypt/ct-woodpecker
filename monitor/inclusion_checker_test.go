@@ -51,7 +51,7 @@ func TestGetEntries(t *testing.T) {
 		entries := []ct.LogEntry{{}, {}, {}}
 		return entries[start : end+1], nil
 	}
-	newHead, entries, err := ic.getEntries(0, 2)
+	newHead, entries, err := ic.getEntries(0, 3)
 	if err != nil {
 		t.Fatalf("Expected no error: %s", err)
 	}
@@ -68,7 +68,7 @@ func TestGetEntries(t *testing.T) {
 		entries := []ct.LogEntry{{}, {}, {}}
 		return []ct.LogEntry{entries[start]}, nil
 	}
-	newHead, entries, err = ic.getEntries(0, 2)
+	newHead, entries, err = ic.getEntries(0, 3)
 	if err != nil {
 		t.Fatalf("Expected no error: %s", err)
 	}
@@ -368,7 +368,7 @@ func TestCheckInclusion(t *testing.T) {
 	}
 
 	mc.GetSTHFunc = func(context.Context) (*ct.SignedTreeHead, error) {
-		return &ct.SignedTreeHead{TreeSize: 1}, nil
+		return &ct.SignedTreeHead{TreeSize: 2}, nil
 	}
 	mc.GetEntriesFunc = func(context.Context, int64, int64) ([]ct.LogEntry, error) {
 		return nil, errors.New("bad")

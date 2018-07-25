@@ -96,7 +96,7 @@ func (ic *inclusionChecker) checkInclusion() error {
 		inclusionErrors.WithLabelValues("getSTH").Inc()
 		return fmt.Errorf("error getting STH from %q: %s", ic.logURI, err)
 	}
-	newHead, entries, err := ic.getEntries(current, int64(sth.TreeSize))
+	newHead, entries, err := ic.getEntries(current, int64(sth.TreeSize)-1)
 	if err != nil {
 		inclusionErrors.WithLabelValues("getEntries").Inc()
 		return fmt.Errorf("error retrieving entries from %q: %s", ic.logURI, err)
@@ -129,7 +129,7 @@ func (ic *inclusionChecker) getEntries(start, end int64) (int64, []ct.LogEntry, 
 		end = start + ic.maxGetEntries
 	}
 	var allEntries []ct.LogEntry
-	for start <= end {
+	for start < end {
 		batchEnd := min(start+ic.batchSize, end)
 		entries, err := ic.client.GetEntries(context.Background(), start, batchEnd)
 		if err != nil {
