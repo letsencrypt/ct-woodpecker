@@ -378,15 +378,19 @@ func (log *testLog) addChain(chain []ct.ASN1Cert, precert bool) (*ct.SignedCerti
 }
 
 // integrateBatch uses the currently active testLog's tree's sequencer to
-// integrate up to 50 queued leaves. The number of queued leaves that was
-// integrated is returned to the caller. If more than 50 leaves are queued
-// integrateBatch should be called multiple times until it returns 0.
-func (log *testLog) integrateBatch() (int, error) {
+// integrate up to `count` queued leaves. The number of queued leaves that was
+// integrated is returned to the caller.
+func (log *testLog) integrateBatch(count int64) (int, error) {
 	maxRootDuration, err := ptypes.Duration(log.activeTree.tree.MaxRootDuration)
 	if err != nil {
 		return 0, err
 	}
-	integratedCount, err := log.activeTree.sequencer.IntegrateBatch(context.Background(), log.activeTree.tree, 50, time.Duration(0), maxRootDuration)
+	integratedCount, err := log.activeTree.sequencer.IntegrateBatch(
+		context.Background(),
+		log.activeTree.tree,
+		int(count),
+		time.Duration(0),
+		maxRootDuration)
 	if err != nil {
 		return 0, err
 	}

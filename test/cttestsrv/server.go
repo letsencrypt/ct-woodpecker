@@ -297,18 +297,18 @@ func (is *IntegrationSrv) SetSTH(mockSTH *ct.SignedTreeHead) error {
 	return nil
 }
 
-// Integrate uses the testLog's currently active tree to sequence up to 50
-// queued leaves. The number of leaves sequenced is returned. If more than 50
+// Integrate uses the testLog's currently active tree to sequence up to `count`
+// queued leaves. The number of leaves sequenced is returned. If more than `count`
 // leaves are queued Integrate will need to be called multiple times to fully
 // process the log's queue of unsequenced leaves. It is safe to call concurrently.
-func (is *IntegrationSrv) Integrate() (int, error) {
-	count, err := is.log.integrateBatch()
+func (is *IntegrationSrv) Integrate(count int64) (int, error) {
+	integratedCount, err := is.log.integrateBatch(count)
 	if err != nil {
 		return 0, err
 	}
 
-	is.logger.Printf("Integrated %d new leave(s)", count)
-	return count, nil
+	is.logger.Printf("Integrated %d new leave(s)", integratedCount)
+	return integratedCount, nil
 }
 
 // Submissions returns the number of add-chain/add-pre-chain requests processed
