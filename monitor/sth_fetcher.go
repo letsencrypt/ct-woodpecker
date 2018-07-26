@@ -145,14 +145,14 @@ func (f *sthFetcher) logErrorf(format string, args ...interface{}) {
 	// changing integration tests. See
 	// https://github.com/letsencrypt/ct-woodpecker/issues/36
 	line := fmt.Sprintf(format, args...)
-	f.logger.Print("[ERROR]", "sth-fetcher", f.logURI, ":", line)
+	f.logger.Print("[ERROR]", " sth-fetcher ", f.logURI, " : ", line)
 }
 
 // logf formats a message to write to the sthFetcher's logger prefixed to
 // identify the source as an sth-fetcher for a specific logURI
 func (f *sthFetcher) logf(format string, args ...interface{}) {
 	line := fmt.Sprintf(format, args...)
-	f.logger.Print("sth-fetcher", f.logURI, ":", line)
+	f.logger.Print("sth-fetcher ", f.logURI, " : ", line)
 }
 
 // log writes a message to the sthFetcher's logger prefixed to identify the
