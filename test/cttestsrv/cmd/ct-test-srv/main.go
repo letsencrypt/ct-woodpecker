@@ -58,7 +58,7 @@ func main() {
 		logger.Fatalf("%s: %s", *configFile, err.Error())
 	}
 
-	// Create and start a IntegrationSrv for each of the configured personalities
+	// Create and start an IntegrationSrv for each of the configured personalities
 	var servers []*cttestsrv.IntegrationSrv
 	for _, p := range c.Personalities {
 		srv, err := cttestsrv.NewServer(p, logger)
