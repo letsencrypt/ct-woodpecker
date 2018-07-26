@@ -251,6 +251,14 @@ func (f *sthFetcher) verifySTHConsistency(firstSTH, secondSTH *ct.SignedTreeHead
 	secondTreeSize := secondSTH.TreeSize
 	secondHash := secondSTH.SHA256RootHash[:]
 
+	// It isn't possible to prove consistency between the empty tree and
+	// a subsequent tree. The invariant 0 < first < second must hold.
+	if firstTreeSize == 0 {
+		f.logf("first STH is tree size 0. No consistency proof is possible " +
+			"between the emtpy tree STH and another STH")
+		return
+	}
+
 	// If the two STH's have equal tree sizes then we expect the SHA256RootHash to
 	// match. If it doesn't match there is no need to check the consistency proofs
 	// because the log is definitely inconsistent. In this case publish an
