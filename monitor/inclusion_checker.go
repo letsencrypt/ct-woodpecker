@@ -21,6 +21,11 @@ var oldestUnseen = promauto.NewGauge(prometheus.GaugeOpts{
 	Help: "Number of seconds since the oldest SCT that we haven't matched to a log entry was received",
 })
 
+var unseenCount = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "unincorporated_certs",
+	Help: "Number of SCTs that haven't been matched to log entries",
+})
+
 var inclusionErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "inclusion_checker_errors",
 	Help: "Number of errors encountered while attempting to check for certificate inclusion",
@@ -86,6 +91,7 @@ func (ic *inclusionChecker) checkInclusion() error {
 		inclusionErrors.WithLabelValues("getUnseen").Inc()
 		return fmt.Errorf("error getting unseen certificates from %q: %s", ic.logURI, err)
 	}
+	unseenCount.Set(float64(len(certs)))
 	if len(certs) == 0 {
 		// nothing to do, don't advance the index
 		return nil
