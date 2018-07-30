@@ -83,6 +83,7 @@ func TestGetEntries(t *testing.T) {
 type malleableDB struct {
 	AddCertFunc      func(int64, *storage.SubmittedCert) error
 	GetUnseenFunc    func(int64) ([]storage.SubmittedCert, error)
+	GetRandSeenFunc  func(logID int64) (*storage.SubmittedCert, error)
 	MarkCertSeenFunc func(int, time.Time) error
 	GetIndexFunc     func(int64) (int64, error)
 	UpdateIndexFunc  func(int64, int64) error
@@ -94,6 +95,10 @@ func (s *malleableDB) AddCert(logID int64, cert *storage.SubmittedCert) error {
 
 func (s *malleableDB) GetUnseen(logID int64) ([]storage.SubmittedCert, error) {
 	return s.GetUnseenFunc(logID)
+}
+
+func (s *malleableDB) GetRandSeen(logID int64) (*storage.SubmittedCert, error) {
+	return s.GetRandSeenFunc(logID)
 }
 
 func (s *malleableDB) MarkCertSeen(id int, seen time.Time) error {

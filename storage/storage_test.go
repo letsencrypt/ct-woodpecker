@@ -94,4 +94,8 @@ func TestCerts(t *testing.T) {
 	if len(certs) != 0 {
 		t.Fatalf("GetUnseen returned unexpected number of certs, expected: 0, got: %d", len(certs))
 	}
+	_, err := db.GetRandSeen(1)
+	if err != nil {
+		t.Fatalf("GetRandSeen failed: %s", err)
+	}
 }

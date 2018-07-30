@@ -1,9 +1,11 @@
 package monitor
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -15,6 +17,7 @@ import (
 
 	ct "github.com/google/certificate-transparency-go"
 	cttls "github.com/google/certificate-transparency-go/tls"
+	ctx509 "github.com/google/certificate-transparency-go/x509"
 	"github.com/jmhodges/clock"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -71,6 +74,8 @@ type SubmitterOptions struct {
 	SubmitPreCert bool
 	// SubmitCert controls whether or not final certificates are submitted
 	SubmitCert bool
+	// SubmitDupes controls whether or not duplicate certificates are submitted
+	SubmitDupes bool
 }
 
 // Valid checks that the SubmitterOptions has a valid positive interval and that
@@ -120,6 +125,8 @@ type certSubmitter struct {
 	submitPreCert bool
 	// Should a final cert be submitted?
 	submitCert bool
+	// Should a duplicate cert be submitted
+	submitDupes bool
 }
 
 // run starts a goroutine that calls submitCertificate, sleeps for
@@ -167,6 +174,14 @@ func (c *certSubmitter) submitCertificates() {
 
 	if c.submitCert {
 		go c.submitCertificate(certPair.Cert, false)
+	}
+
+	if c.submitDupes {
+		go func() {
+			if err := c.submitIncludedDupe(); err != nil {
+				c.logger.Printf("!!! Error submitting duplicate certificate: %s", err)
+			}
+		}()
 	}
 }
 
@@ -255,4 +270,62 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 	successLabels := prometheus.Labels{"uri": c.logURI, "status": "ok", "precert": strconv.FormatBool(isPreCert)}
 	c.stats.certSubmitResults.With(successLabels).Inc()
 	c.logger.Printf("%s chain submitted to %q. SCT timestamp %s", certKind, c.logURI, ts)
+}
+
+func (c certSubmitter) submitIncludedDupe() error {
+	cert, err := c.db.GetRandSeen(c.logID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve a random included entry: %s", err)
+	}
+	if err == sql.ErrNoRows {
+		return nil
+	}
+
+	originalCert, err := ctx509.ParseCertificate(cert.Cert)
+	if err != nil {
+		return fmt.Errorf("failed to parse certificate: %s", err)
+	}
+
+	var submissionMethod func(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
+	submissionMethod = c.client.AddChain
+	chain := []ct.ASN1Cert{ct.ASN1Cert{Data: cert.Cert}}
+	certKind := "certificate"
+	if originalCert.IsPrecertificate() {
+		submissionMethod = c.client.AddPreChain
+		chain = append(chain, ct.ASN1Cert{Data: c.certIssuer.Raw})
+		certKind = "precertificate"
+	}
+
+	start := c.clk.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), c.certSubmitTimeout)
+	defer cancel()
+	sct, err := submissionMethod(ctx, chain)
+	elapsed := c.clk.Since(start)
+	latencyLabels := prometheus.Labels{"uri": c.logURI, "precert": strconv.FormatBool(originalCert.IsPrecertificate())}
+	c.stats.certSubmitLatency.With(latencyLabels).Observe(elapsed.Seconds())
+
+	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail", "precert": strconv.FormatBool(originalCert.IsPrecertificate())}
+	if err != nil {
+		c.stats.certSubmitResults.With(failLabels).Inc()
+		return fmt.Errorf("%s submission to %q failed: %s", certKind, c.logURI, err)
+	}
+
+	sctBytes, err := cttls.Marshal(sct)
+	if err != nil {
+		return fmt.Errorf("failed to parse returned SCT: %s", err)
+	}
+	if bytes.Compare(sctBytes, cert.SCT) != 0 {
+		// non-matching SCT, add to database for future inclusion checking
+		err = c.db.AddCert(c.logID, &storage.SubmittedCert{
+			Cert:      cert.Cert,
+			SCT:       sctBytes,
+			Timestamp: sct.Timestamp,
+		})
+		if err != nil {
+			c.stats.certStorageFailures.WithLabelValues("storing").Inc()
+			return fmt.Errorf("failed to store submitted %s: %s", certKind, err)
+		}
+	}
+
+	return nil
 }

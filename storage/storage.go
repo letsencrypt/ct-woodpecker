@@ -12,6 +12,7 @@ import (
 type Storage interface {
 	AddCert(logID int64, cert *SubmittedCert) error
 	GetUnseen(logID int64) ([]SubmittedCert, error)
+	GetRandSeen(logID int64) (*SubmittedCert, error)
 	MarkCertSeen(id int, seen time.Time) error
 	GetIndex(logID int64) (int64, error)
 	UpdateIndex(logID int64, index int64) error
@@ -69,6 +70,27 @@ func (s *impl) GetUnseen(logID int64) ([]SubmittedCert, error) {
 		return nil, err
 	}
 	return certs, nil
+}
+
+// GetRandSeen returns a random certificate that has been marked seen
+func (s *impl) GetRandSeen(logID int64) (*SubmittedCert, error) {
+	// ORDER BY RAND() is pretty hacky, it should work relatively well for smaller tables but
+	// the performance will significantly suffer as the size increases. Another option would be
+	// to select all of the IDs of seen certs and then randomly choose one from that, but that's
+	// also a bit bad (probably better though?).
+	rows, err := s.db.Query("SELECT ID, Cert, SCT, Timestamp FROM SubmittedCerts WHERE LogID = ? and SEEN IS NOT NULL ORDER BY RAND() LIMIT 1", logID)
+	if err != nil {
+		return nil, err
+	}
+	var cert *SubmittedCert
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		cert = &SubmittedCert{}
+		if err := rows.Scan(&cert.ID, &cert.Cert, &cert.SCT, &cert.Timestamp); err != nil {
+			return nil, err
+		}
+	}
+	return cert, nil
 }
 
 // MarkCertSeen updates the row once a log entry has been seen that matches the SCT
