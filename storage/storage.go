@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -74,11 +75,24 @@ func (s *impl) GetUnseen(logID int64) ([]SubmittedCert, error) {
 
 // GetRandSeen returns a random certificate that has been marked seen
 func (s *impl) GetRandSeen(logID int64) (*SubmittedCert, error) {
-	// ORDER BY RAND() is pretty hacky, it should work relatively well for smaller tables but
-	// the performance will significantly suffer as the size increases. Another option would be
-	// to select all of the IDs of seen certs and then randomly choose one from that, but that's
-	// also a bit bad (probably better though?).
-	rows, err := s.db.Query("SELECT ID, Cert, SCT, Timestamp FROM SubmittedCerts WHERE LogID = ? and SEEN IS NOT NULL ORDER BY RAND() LIMIT 1", logID)
+	rows, err := s.db.Query("SELECT ID FROM SubmittedCerts WHERE LogID = ? and Seen IS NOT NULL ORDER BY Timestamp ASC LIMIT 1000", logID)
+	if err != nil {
+		return nil, err
+	}
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err = rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	_ = rows.Close()
+
+	// randomly pick an id from the list
+	id := ids[rand.Intn(len(ids))]
+	rows, err = s.db.Query("SELECT ID, Cert, SCT, Timestamp FROM SubmittedCerts WHERE LogID = ? and ID = ?", logID, id)
 	if err != nil {
 		return nil, err
 	}
