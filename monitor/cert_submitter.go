@@ -29,6 +29,7 @@ type certSubmitterStats struct {
 	certSubmitLatency   *prometheus.HistogramVec
 	certSubmitResults   *prometheus.CounterVec
 	certStorageFailures *prometheus.CounterVec
+	storedSCTs          prometheus.Counter
 }
 
 var (
@@ -47,11 +48,15 @@ var (
 		certSubmitResults: promauto.NewCounterVec(prometheus.CounterOpts{
 			Name: "cert_submit_results",
 			Help: "Count of results from submitting certificate chains to CT logs, sliced by status",
-		}, []string{"uri", "status", "precert"}),
+		}, []string{"uri", "status", "precert", "duplicate"}),
 		certStorageFailures: promauto.NewCounterVec(prometheus.CounterOpts{
 			Name: "cert_storage_failures",
 			Help: "Count of failures to store submitted certificates and their SCTs",
-		}, []string{"type"}),
+		}, []string{"uri", "type"}),
+		storedSCTs: promauto.NewCounter(prometheus.CounterOpts{
+			Name: "stored_scts",
+			Help: "Count of unique SCTs we have retrieved and stored in the database",
+		}),
 	}
 )
 
@@ -185,6 +190,40 @@ func (c *certSubmitter) submitCertificates() {
 	}
 }
 
+func (c certSubmitter) submit(cert []byte, precert bool) (*ct.SignedCertificateTimestamp, error) {
+	chain := []ct.ASN1Cert{
+		{Data: cert},
+	}
+
+	// Precert submissions also need the issuer in the chain because the SCT for
+	// for precerts can contain the issuer SPKI.
+	if precert {
+		chain = append(chain, ct.ASN1Cert{Data: c.certIssuer.Raw})
+	}
+
+	var submissionMethod func(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
+	submissionMethod = c.client.AddChain
+	certKind := "certificate"
+	if precert {
+		submissionMethod = c.client.AddPreChain
+		certKind = "precertificate"
+	}
+	c.logger.Printf("Submitting %s to %q\n", certKind, c.logURI)
+
+	start := c.clk.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), c.certSubmitTimeout)
+	defer cancel()
+	sct, err := submissionMethod(ctx, chain)
+	elapsed := c.clk.Since(start)
+	latencyLabels := prometheus.Labels{"uri": c.logURI, "precert": strconv.FormatBool(precert)}
+	c.stats.certSubmitLatency.With(latencyLabels).Observe(elapsed.Seconds())
+	if err != nil {
+		return nil, err
+	}
+
+	return sct, nil
+}
+
 // submitCertificate submits a single x509 Certificate to a log. If `isPreCert`
 // is true then the certificate is submitted via the log's add-pre-chain
 // endpoint, otherwise the add-chain endpoint is used. The latency of the
@@ -196,36 +235,14 @@ func (c *certSubmitter) submitCertificates() {
 // invalid if the signature does not validate, or if the timestamp is too far in
 // the future or the past (controlled by `requiredSCTFreshness`).
 func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool) {
-	chain := []ct.ASN1Cert{
-		{Data: cert.Raw},
-	}
-
-	// Precert submissions also need the issuer in the chain because the SCT for
-	// for precerts can contain the issuer SPKI.
-	if isPreCert {
-		chain = append(chain, ct.ASN1Cert{Data: c.certIssuer.Raw})
-	}
-
-	var submissionMethod func(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
-	submissionMethod = c.client.AddChain
+	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail", "precert": strconv.FormatBool(isPreCert), "duplicate": "false"}
 	certKind := "certificate"
 	if isPreCert {
-		submissionMethod = c.client.AddPreChain
 		certKind = "precertificate"
 	}
-	c.logger.Printf("Submitting %s to %q\n", certKind, c.logURI)
-
-	start := c.clk.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), c.certSubmitTimeout)
-	defer cancel()
-	sct, err := submissionMethod(ctx, chain)
-	elapsed := c.clk.Since(start)
-	latencyLabels := prometheus.Labels{"uri": c.logURI, "precert": strconv.FormatBool(isPreCert)}
-	c.stats.certSubmitLatency.With(latencyLabels).Observe(elapsed.Seconds())
-
-	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail", "precert": strconv.FormatBool(isPreCert)}
+	sct, err := c.submit(cert.Raw, isPreCert)
 	if err != nil {
-		c.logger.Printf("!!! Error submitting %s to %q: %s\n", certKind, c.logURI, err.Error())
+		c.logger.Printf("!!! Error submitting %s to %q: %s\n", certKind, c.logURI, err)
 		c.stats.certSubmitResults.With(failLabels).Inc()
 		return
 	}
@@ -234,7 +251,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 		sctBytes, err := cttls.Marshal(sct)
 		if err != nil {
 			c.logger.Printf("!!! Error serializing SCT: %s", err)
-			c.stats.certStorageFailures.WithLabelValues("marshalling").Inc()
+			c.stats.certStorageFailures.WithLabelValues(c.logURI, "marshalling").Inc()
 			return
 		}
 		err = c.db.AddCert(c.logID, &storage.SubmittedCert{
@@ -244,9 +261,10 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 		})
 		if err != nil {
 			c.logger.Printf("!!! Error saving submitted cert: %s", err)
-			c.stats.certStorageFailures.WithLabelValues("storing").Inc()
+			c.stats.certStorageFailures.WithLabelValues(c.logURI, "storing").Inc()
 			return
 		}
+		c.stats.storedSCTs.Inc()
 	}
 
 	ts := time.Unix(0, int64(sct.Timestamp)*int64(time.Millisecond))
@@ -267,7 +285,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 		return
 	}
 
-	successLabels := prometheus.Labels{"uri": c.logURI, "status": "ok", "precert": strconv.FormatBool(isPreCert)}
+	successLabels := prometheus.Labels{"uri": c.logURI, "status": "ok", "precert": strconv.FormatBool(isPreCert), "duplicate": "false"}
 	c.stats.certSubmitResults.With(successLabels).Inc()
 	c.logger.Printf("%s chain submitted to %q. SCT timestamp %s", certKind, c.logURI, ts)
 }
@@ -275,10 +293,10 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 func (c certSubmitter) submitIncludedDupe() error {
 	cert, err := c.db.GetRandSeen(c.logID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
 		return fmt.Errorf("failed to retrieve a random included entry: %s", err)
-	}
-	if err == sql.ErrNoRows {
-		return nil
 	}
 
 	originalCert, err := ctx509.ParseCertificate(cert.Cert)
@@ -286,34 +304,24 @@ func (c certSubmitter) submitIncludedDupe() error {
 		return fmt.Errorf("failed to parse certificate: %s", err)
 	}
 
-	var submissionMethod func(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
-	submissionMethod = c.client.AddChain
-	chain := []ct.ASN1Cert{ct.ASN1Cert{Data: cert.Cert}}
+	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail", "precert": strconv.FormatBool(originalCert.IsPrecertificate()), "duplicate": "true"}
 	certKind := "certificate"
 	if originalCert.IsPrecertificate() {
-		submissionMethod = c.client.AddPreChain
-		chain = append(chain, ct.ASN1Cert{Data: c.certIssuer.Raw})
 		certKind = "precertificate"
 	}
-
-	start := c.clk.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), c.certSubmitTimeout)
-	defer cancel()
-	sct, err := submissionMethod(ctx, chain)
-	elapsed := c.clk.Since(start)
-	latencyLabels := prometheus.Labels{"uri": c.logURI, "precert": strconv.FormatBool(originalCert.IsPrecertificate())}
-	c.stats.certSubmitLatency.With(latencyLabels).Observe(elapsed.Seconds())
-
-	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail", "precert": strconv.FormatBool(originalCert.IsPrecertificate())}
+	sct, err := c.submit(cert.Cert, originalCert.IsPrecertificate())
 	if err != nil {
 		c.stats.certSubmitResults.With(failLabels).Inc()
 		return fmt.Errorf("%s submission to %q failed: %s", certKind, c.logURI, err)
 	}
+	c.stats.certSubmitResults.With(prometheus.Labels{"uri": c.logURI, "status": "ok", "precert": strconv.FormatBool(originalCert.IsPrecertificate()), "duplicate": "true"}).Inc()
 
-	sctBytes, err := cttls.Marshal(sct)
+	sctBytes, err := cttls.Marshal(*sct)
 	if err != nil {
+		c.stats.certStorageFailures.WithLabelValues(c.logURI, "marshalling").Inc()
 		return fmt.Errorf("failed to parse returned SCT: %s", err)
 	}
+	fmt.Println(sctBytes)
 	if bytes.Compare(sctBytes, cert.SCT) != 0 {
 		// non-matching SCT, add to database for future inclusion checking
 		err = c.db.AddCert(c.logID, &storage.SubmittedCert{
@@ -322,9 +330,10 @@ func (c certSubmitter) submitIncludedDupe() error {
 			Timestamp: sct.Timestamp,
 		})
 		if err != nil {
-			c.stats.certStorageFailures.WithLabelValues("storing").Inc()
+			c.stats.certStorageFailures.WithLabelValues(c.logURI, "storing").Inc()
 			return fmt.Errorf("failed to store submitted %s: %s", certKind, err)
 		}
+		c.stats.storedSCTs.Inc()
 	}
 
 	return nil

@@ -80,44 +80,11 @@ func TestGetEntries(t *testing.T) {
 	}
 }
 
-type malleableDB struct {
-	AddCertFunc      func(int64, *storage.SubmittedCert) error
-	GetUnseenFunc    func(int64) ([]storage.SubmittedCert, error)
-	GetRandSeenFunc  func(logID int64) (*storage.SubmittedCert, error)
-	MarkCertSeenFunc func(int, time.Time) error
-	GetIndexFunc     func(int64) (int64, error)
-	UpdateIndexFunc  func(int64, int64) error
-}
-
-func (s *malleableDB) AddCert(logID int64, cert *storage.SubmittedCert) error {
-	return s.AddCertFunc(logID, cert)
-}
-
-func (s *malleableDB) GetUnseen(logID int64) ([]storage.SubmittedCert, error) {
-	return s.GetUnseenFunc(logID)
-}
-
-func (s *malleableDB) GetRandSeen(logID int64) (*storage.SubmittedCert, error) {
-	return s.GetRandSeenFunc(logID)
-}
-
-func (s *malleableDB) MarkCertSeen(id int, seen time.Time) error {
-	return s.MarkCertSeenFunc(id, seen)
-}
-
-func (s *malleableDB) GetIndex(logID int64) (int64, error) {
-	return s.GetIndexFunc(logID)
-}
-
-func (s *malleableDB) UpdateIndex(logID int64, index int64) error {
-	return s.UpdateIndexFunc(logID, index)
-}
-
 func TestCheckEntries(t *testing.T) {
 	fc := clock.NewFake()
 	k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	sv, _ := ct.NewSignatureVerifier(k.Public())
-	mdb := &malleableDB{}
+	mdb := &storage.MalleableTestDB{}
 	ic := inclusionChecker{
 		logger:           log.New(os.Stdout, "", log.LstdFlags),
 		clk:              fc,
@@ -320,7 +287,7 @@ func TestCheckInclusion(t *testing.T) {
 	fc := clock.NewFake()
 	k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	sv, _ := ct.NewSignatureVerifier(k.Public())
-	mdb := &malleableDB{}
+	mdb := &storage.MalleableTestDB{}
 	mc := &malleableClient{}
 	ic := inclusionChecker{
 		logger:           log.New(os.Stdout, "", log.LstdFlags),

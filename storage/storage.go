@@ -139,3 +139,38 @@ func (s *impl) UpdateIndex(logID int64, index int64) error {
 	}
 	return nil
 }
+
+// MalleableTestDB is a mock database client used for testing. It is exported so it can be used
+// in other packages when we don't want to use an actual database for tests.
+type MalleableTestDB struct {
+	AddCertFunc      func(int64, *SubmittedCert) error
+	GetUnseenFunc    func(int64) ([]SubmittedCert, error)
+	GetRandSeenFunc  func(logID int64) (*SubmittedCert, error)
+	MarkCertSeenFunc func(int, time.Time) error
+	GetIndexFunc     func(int64) (int64, error)
+	UpdateIndexFunc  func(int64, int64) error
+}
+
+func (s *MalleableTestDB) AddCert(logID int64, cert *SubmittedCert) error {
+	return s.AddCertFunc(logID, cert)
+}
+
+func (s *MalleableTestDB) GetUnseen(logID int64) ([]SubmittedCert, error) {
+	return s.GetUnseenFunc(logID)
+}
+
+func (s *MalleableTestDB) GetRandSeen(logID int64) (*SubmittedCert, error) {
+	return s.GetRandSeenFunc(logID)
+}
+
+func (s *MalleableTestDB) MarkCertSeen(id int, seen time.Time) error {
+	return s.MarkCertSeenFunc(id, seen)
+}
+
+func (s *MalleableTestDB) GetIndex(logID int64) (int64, error) {
+	return s.GetIndexFunc(logID)
+}
+
+func (s *MalleableTestDB) UpdateIndex(logID int64, index int64) error {
+	return s.UpdateIndexFunc(logID, index)
+}
