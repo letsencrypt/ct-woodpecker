@@ -16,7 +16,6 @@ import (
 
 	"github.com/google/certificate-transparency-go"
 	"github.com/jmhodges/clock"
-	// "golang.org/x/net/context"
 
 	"github.com/letsencrypt/ct-woodpecker/pki"
 	"github.com/letsencrypt/ct-woodpecker/storage"

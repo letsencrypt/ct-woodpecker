@@ -79,8 +79,9 @@ type SubmitterOptions struct {
 	SubmitPreCert bool
 	// SubmitCert controls whether or not final certificates are submitted
 	SubmitCert bool
-	// SubmitDupes controls whether or not duplicate certificates are submitted
-	SubmitDupes bool
+	// ResubmitIncluded controls whether or not already included duplicate
+	// certificates are submitted
+	ResubmitIncluded bool
 }
 
 // Valid checks that the SubmitterOptions has a valid positive interval and that
@@ -130,8 +131,8 @@ type certSubmitter struct {
 	submitPreCert bool
 	// Should a final cert be submitted?
 	submitCert bool
-	// Should a duplicate cert be submitted
-	submitDupes bool
+	// Should a already included duplicate cert be submitted
+	resubmitIncluded bool
 }
 
 // run starts a goroutine that calls submitCertificate, sleeps for
@@ -181,7 +182,7 @@ func (c *certSubmitter) submitCertificates() {
 		go c.submitCertificate(certPair.Cert, false)
 	}
 
-	if c.submitDupes {
+	if c.resubmitIncluded {
 		go func() {
 			if err := c.submitIncludedDupe(); err != nil {
 				c.logger.Printf("!!! Error submitting duplicate certificate: %s", err)
@@ -224,7 +225,7 @@ func (c certSubmitter) submit(cert []byte, precert bool) (*ct.SignedCertificateT
 	return sct, nil
 }
 
-// submitCertificate submits a single x509 Certificate to a log. If `isPreCert`
+// submitCertificate submits a single x509 Certificate to a log. If `precert`
 // is true then the certificate is submitted via the log's add-pre-chain
 // endpoint, otherwise the add-chain endpoint is used. The latency of the
 // submission is tracked in the `cert_submit_latency` prometheus histogram. If
@@ -234,13 +235,13 @@ func (c certSubmitter) submit(cert []byte, precert bool) (*ct.SignedCertificateT
 // countervec is incremented with a "ok" status tag. An SCT is considered
 // invalid if the signature does not validate, or if the timestamp is too far in
 // the future or the past (controlled by `requiredSCTFreshness`).
-func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool) {
-	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail", "precert": strconv.FormatBool(isPreCert), "duplicate": "false"}
+func (c certSubmitter) submitCertificate(cert *x509.Certificate, precert bool) {
+	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail", "precert": strconv.FormatBool(precert), "duplicate": "false"}
 	certKind := "certificate"
-	if isPreCert {
+	if precert {
 		certKind = "precertificate"
 	}
-	sct, err := c.submit(cert.Raw, isPreCert)
+	sct, err := c.submit(cert.Raw, precert)
 	if err != nil {
 		c.logger.Printf("!!! Error submitting %s to %q: %s\n", certKind, c.logURI, err)
 		c.stats.certSubmitResults.With(failLabels).Inc()
@@ -285,11 +286,17 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, isPreCert bool)
 		return
 	}
 
-	successLabels := prometheus.Labels{"uri": c.logURI, "status": "ok", "precert": strconv.FormatBool(isPreCert), "duplicate": "false"}
+	successLabels := prometheus.Labels{"uri": c.logURI, "status": "ok", "precert": strconv.FormatBool(precert), "duplicate": "false"}
 	c.stats.certSubmitResults.With(successLabels).Inc()
 	c.logger.Printf("%s chain submitted to %q. SCT timestamp %s", certKind, c.logURI, ts)
 }
 
+// submitIncludedDupe resubmits certificates that have already been included in the log
+// in order to determine how the log treats this situation. A certificate is randomly
+// selected from the database of certificates that we've previously submitted and
+// subsequently verified the inclusion of and then submitted to the same log. If the
+// SCT that is returned does not match the SCT we were given after the first submission
+// we add a new entry to the certificate table and track it for inclusion.
 func (c certSubmitter) submitIncludedDupe() error {
 	cert, err := c.db.GetRandSeen(c.logID)
 	if err != nil {
@@ -321,7 +328,6 @@ func (c certSubmitter) submitIncludedDupe() error {
 		c.stats.certStorageFailures.WithLabelValues(c.logURI, "marshalling").Inc()
 		return fmt.Errorf("failed to parse returned SCT: %s", err)
 	}
-	fmt.Println(sctBytes)
 	if bytes.Compare(sctBytes, cert.SCT) != 0 {
 		// non-matching SCT, add to database for future inclusion checking
 		err = c.db.AddCert(c.logID, &storage.SubmittedCert{

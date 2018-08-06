@@ -169,7 +169,7 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 			certIssuerKey:      opts.SubmitOpts.IssuerKey,
 			submitPreCert:      opts.SubmitOpts.SubmitPreCert,
 			submitCert:         opts.SubmitOpts.SubmitCert,
-			submitDupes:        opts.SubmitOpts.SubmitDupes,
+			resubmitIncluded:   opts.SubmitOpts.ResubmitIncluded,
 		}
 		if db != nil {
 			keyHash := sha256.Sum256([]byte(opts.LogKey))

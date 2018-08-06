@@ -24,8 +24,7 @@ func CountCounter(counter prometheus.Counter) int {
 }
 
 // CountCounterVecWithLabels returns the current count a prometheus CounterVec
-// with the given labels, or an error if there was a problem collecting the
-// value.
+// with the given labels. If there was a problem collecting the value then it panics.
 func CountCounterVecWithLabels(counterVec *prometheus.CounterVec, labels prometheus.Labels) int {
 	return CountCounter(counterVec.With(labels))
 }
@@ -53,8 +52,8 @@ func GaugeValueWithLabels(vecGauge *prometheus.GaugeVec, labels prometheus.Label
 }
 
 // CountHistogramSamplesWithLabels returns the number of samples a given prometheus
-// Histogram has seen with the given labels, or an error if there was a problem
-// collecting the sample count.
+// Histogram has seen with the given labels. If there was a problem collecting the
+// sample count it panics.
 func CountHistogramSamplesWithLabels(histVec *prometheus.HistogramVec, labels prometheus.Labels) int {
 	obs, err := histVec.GetMetricWith(labels)
 	if err != nil {
