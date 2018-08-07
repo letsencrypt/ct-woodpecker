@@ -201,6 +201,7 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 			signatureChecker: sv,
 			logID:            big.NewInt(0).SetBytes(keyHash[:]).Int64(),
 			batchSize:        opts.InclusionOpts.FetchBatchSize,
+			maxGetEntries:    opts.InclusionOpts.MaxGetEntries,
 			stopChan:         make(chan bool, 1),
 		}
 	}
