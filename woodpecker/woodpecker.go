@@ -336,7 +336,7 @@ func (w *Woodpecker) Run() {
 	go func() {
 		err := w.metricsServer.ListenAndServe()
 		if err != nil {
-			w.logger.Println(err.Error())
+			w.logger.Fatalf("Unable to start metrics server: %s", err)
 		}
 	}()
 
