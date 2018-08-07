@@ -335,8 +335,8 @@ func (w *Woodpecker) Run() {
 	// Run the metrics HTTP server in its own goroutine
 	go func() {
 		err := w.metricsServer.ListenAndServe()
-		if err != nil {
-			w.logger.Println(err.Error())
+		if err != nil && err != http.ErrServerClosed {
+			w.logger.Fatalf("metrics server failed: %s", err)
 		}
 	}()
 
