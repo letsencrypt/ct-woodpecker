@@ -1,41 +1,39 @@
 package monitor
 
 import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"database/sql"
 	"log"
+	"math/big"
+	"os"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/google/certificate-transparency-go"
 	"github.com/jmhodges/clock"
+
 	"github.com/letsencrypt/ct-woodpecker/pki"
+	"github.com/letsencrypt/ct-woodpecker/storage"
 	"github.com/letsencrypt/ct-woodpecker/test"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 func assertLatencySamples(t *testing.T, logURI string, precert bool, expected int, histogram *prometheus.HistogramVec) {
 	labels := prometheus.Labels{"uri": logURI, "precert": strconv.FormatBool(precert)}
-	latencyObservations, err := test.CountHistogramSamplesWithLabels(histogram, labels)
-	if err != nil {
-		t.Errorf("Unexpected error counting latency histogram samples: %s",
-			err.Error())
-	}
+	latencyObservations := test.CountHistogramSamplesWithLabels(histogram, labels)
 	if latencyObservations != expected {
 		t.Errorf("Expected %d latency histogram samples. Found %d",
 			expected, latencyObservations)
 	}
 }
 
-func assertResultsCount(t *testing.T, logURI string, precert bool, success bool, expected int, counter *prometheus.CounterVec) {
-	status := "fail"
-	if success {
-		status = "ok"
-	}
-	labels := prometheus.Labels{"uri": logURI, "status": status, "precert": strconv.FormatBool(precert)}
-
-	count, err := test.CountCounterVecWithLabels(counter, labels)
-	if err != nil {
-		t.Errorf("Unexpected error counting CounterVec: %s", err.Error())
-	}
+func assertCounterVecCount(t *testing.T, labels prometheus.Labels, expected int, counter *prometheus.CounterVec) {
+	count := test.CountCounterVecWithLabels(counter, labels)
 	if count != expected {
 		t.Errorf("Expected countervec to be %d, was %d", expected, count)
 	}
@@ -139,14 +137,146 @@ func TestSubmitCertificate(t *testing.T) {
 			}
 
 			// There should be the correct number of failed precert submissions
-			assertResultsCount(t, logURI, true, false, failCount, m.submitter.stats.certSubmitResults)
+			assertCounterVecCount(t, prometheus.Labels{"uri": logURI, "status": "fail", "precert": "true", "duplicate": "false"}, failCount, m.submitter.stats.certSubmitResults)
 			// and the correct number of failed cert submissions
-			assertResultsCount(t, logURI, false, false, failCount, m.submitter.stats.certSubmitResults)
+			assertCounterVecCount(t, prometheus.Labels{"uri": logURI, "status": "fail", "precert": "false", "duplicate": "false"}, failCount, m.submitter.stats.certSubmitResults)
 
 			// There should also be the correct number of successful precert submissions
-			assertResultsCount(t, logURI, true, true, successCount, m.submitter.stats.certSubmitResults)
+			assertCounterVecCount(t, prometheus.Labels{"uri": logURI, "status": "ok", "precert": "true", "duplicate": "false"}, successCount, m.submitter.stats.certSubmitResults)
 			// and the correct number of successful cert submissions
-			assertResultsCount(t, logURI, false, true, successCount, m.submitter.stats.certSubmitResults)
+			assertCounterVecCount(t, prometheus.Labels{"uri": logURI, "status": "ok", "precert": "false", "duplicate": "false"}, successCount, m.submitter.stats.certSubmitResults)
 		})
+	}
+}
+
+type dupeClient struct {
+	sct *ct.SignedCertificateTimestamp
+}
+
+func (dc *dupeClient) GetSTH(_ context.Context) (*ct.SignedTreeHead, error) {
+	return &ct.SignedTreeHead{}, nil
+}
+
+func (dc *dupeClient) AddChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
+	return dc.sct, nil
+}
+
+func (dc *dupeClient) AddPreChain(_ context.Context, _ []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error) {
+	return dc.sct, nil
+}
+
+func (dc *dupeClient) GetEntries(_ context.Context, _, _ int64) ([]ct.LogEntry, error) {
+	return []ct.LogEntry{}, nil
+}
+
+func (dc *dupeClient) GetSTHConsistency(_ context.Context, _ uint64, _ uint64) ([][]byte, error) {
+	return [][]byte{}, nil
+}
+
+func TestSubmitIncludedDupe(t *testing.T) {
+	mdb := &storage.MalleableTestDB{}
+	dc := dupeClient{}
+	c := certSubmitter{
+		db:         mdb,
+		logID:      1,
+		logURI:     "test-log",
+		stats:      certStats,
+		certIssuer: &x509.Certificate{Raw: []byte{1, 2, 3}},
+		client:     &dc,
+		logger:     log.New(os.Stdout, "", log.LstdFlags),
+		clk:        clock.New(),
+	}
+
+	testCases := []struct {
+		setup       func()
+		submissions int
+		newSCTs     int
+	}{
+		{
+			setup: func() {
+				// No included certificates to return
+				mdb.GetRandSeenFunc = func(logID int64) (*storage.SubmittedCert, error) {
+					return nil, sql.ErrNoRows
+				}
+			},
+			submissions: 0,
+			newSCTs:     0,
+		},
+		{
+			setup: func() {
+				// Same SCT returned
+				k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+				if err != nil {
+					panic(err)
+				}
+				tmpl := &x509.Certificate{
+					SerialNumber: big.NewInt(10),
+				}
+				cert, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, k.Public(), k)
+				if err != nil {
+					panic(err)
+				}
+				mdb.GetRandSeenFunc = func(logID int64) (*storage.SubmittedCert, error) {
+					return &storage.SubmittedCert{
+						ID:        1,
+						Cert:      cert,
+						SCT:       []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						Timestamp: 1,
+					}, nil
+				}
+				dc.sct = &ct.SignedCertificateTimestamp{}
+			},
+			submissions: 1,
+			newSCTs:     0,
+		},
+		{
+			setup: func() {
+				// Different SCT returned
+				k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+				if err != nil {
+					panic(err)
+				}
+				tmpl := &x509.Certificate{
+					SerialNumber: big.NewInt(10),
+				}
+				cert, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, k.Public(), k)
+				if err != nil {
+					panic(err)
+				}
+				mdb.GetRandSeenFunc = func(logID int64) (*storage.SubmittedCert, error) {
+					return &storage.SubmittedCert{
+						ID:        1,
+						Cert:      cert,
+						SCT:       []byte{0},
+						Timestamp: 1,
+					}, nil
+				}
+				mdb.AddCertFunc = func(int64, *storage.SubmittedCert) error {
+					return nil
+				}
+				dc.sct = &ct.SignedCertificateTimestamp{}
+			},
+			submissions: 1,
+			newSCTs:     1,
+		},
+	}
+
+	prevSubmissions := 0
+	prevSCTs := 0
+	for _, tc := range testCases {
+		tc.setup()
+
+		err := c.submitIncludedDupe()
+		if err != nil {
+			t.Fatalf("Unexpected error: %s", err)
+		}
+
+		assertCounterVecCount(t, prometheus.Labels{"uri": c.logURI, "status": "ok", "precert": "false", "duplicate": "true"}, tc.submissions+prevSubmissions, c.stats.certSubmitResults)
+		newSCTsCount := test.CountCounter(c.stats.storedSCTs)
+		if newSCTsCount != tc.newSCTs+prevSCTs {
+			t.Fatalf("Expected %d new SCTs, got %d", tc.newSCTs, newSCTsCount-prevSCTs)
+		}
+		prevSubmissions += tc.submissions
+		prevSCTs += tc.newSCTs
 	}
 }

@@ -39,18 +39,14 @@ func TestObserveSTH(t *testing.T) {
 	m.fetcher.observeSTH()
 
 	// Failures should have a latency observation
-	latencyObservations, err := test.CountHistogramSamplesWithLabels(m.fetcher.stats.sthLatency, labels)
-	if err != nil {
-		t.Errorf("Unexpected error counting m.fetcher.stats.sthLatency samples: %s",
-			err.Error())
-	}
+	latencyObservations := test.CountHistogramSamplesWithLabels(m.fetcher.stats.sthLatency, labels)
 	if latencyObservations != 1 {
 		t.Errorf("Expected m.fetcher.stats.sthLatency to have 1 sample, had %d",
 			latencyObservations)
 	}
 
 	// Failures should increment the sthFailures counter
-	failureMetric, err := test.CountCounterVecWithLabels(m.fetcher.stats.sthFailures, labels)
+	failureMetric := test.CountCounterVecWithLabels(m.fetcher.stats.sthFailures, labels)
 	if err != nil {
 		t.Errorf("Unexpected error counting m.fetcher.stats.sthFailures countervec: %s",
 			err.Error())
@@ -70,7 +66,7 @@ func TestObserveSTH(t *testing.T) {
 	m.fetcher.observeSTH()
 
 	// There should be another latency observation sample
-	latencyObservations, err = test.CountHistogramSamplesWithLabels(m.fetcher.stats.sthLatency, labels)
+	latencyObservations = test.CountHistogramSamplesWithLabels(m.fetcher.stats.sthLatency, labels)
 	if err != nil {
 		t.Errorf("Unexpected error counting m.fetcher.stats.sthLatency samples: %s",
 			err.Error())
@@ -149,14 +145,14 @@ func TestVerifySTHConsistency(t *testing.T) {
 	// type label and not increment the latency stat
 	f.verifySTHConsistency(first, second)
 	inequalHashLabels := prometheus.Labels{"uri": logURI, "type": "equal-treesize-inequal-hash"}
-	failureMetric := test.MustCountCounterVecWithLabels(f.stats.sthInconsistencies, inequalHashLabels)
+	failureMetric := test.CountCounterVecWithLabels(f.stats.sthInconsistencies, inequalHashLabels)
 	expectedFailures := 1
 	if failureMetric != expectedFailures {
 		t.Errorf("Expected m.fetcher.stats.sthInconsistencies to be %d, was %d",
 			expectedFailures, failureMetric)
 	}
 	latencyLabels := prometheus.Labels{"uri": logURI}
-	latencySamples := test.MustCountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
+	latencySamples := test.CountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
 	expectedLatencySamples := 0
 	if latencySamples != expectedLatencySamples {
 		t.Errorf("Expected %d m.fetcher.stats.sthProofLatency samples, found %d", expectedLatencySamples, latencySamples)
@@ -169,12 +165,12 @@ func TestVerifySTHConsistency(t *testing.T) {
 	// the same hashes should not increment the inconsistencies stat or the
 	// number of latency observations
 	f.verifySTHConsistency(first, second)
-	failureMetric = test.MustCountCounterVecWithLabels(f.stats.sthInconsistencies, inequalHashLabels)
+	failureMetric = test.CountCounterVecWithLabels(f.stats.sthInconsistencies, inequalHashLabels)
 	if failureMetric != expectedFailures {
 		t.Errorf("Expected m.fetcher.stats.sthInconsistencies to be %d, was %d",
 			expectedFailures, failureMetric)
 	}
-	latencySamples = test.MustCountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
+	latencySamples = test.CountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
 	if latencySamples != expectedLatencySamples {
 		t.Errorf("Expected %d m.fetcher.stats.sthProofLatency samples, found %d", expectedLatencySamples, latencySamples)
 	}
@@ -187,13 +183,13 @@ func TestVerifySTHConsistency(t *testing.T) {
 	// increment the inconsistencies stat and the number of latency observations
 	f.verifySTHConsistency(first, second)
 	proofGetFailureLabels := prometheus.Labels{"uri": logURI, "type": "failed-to-get-proof"}
-	failureMetric = test.MustCountCounterVecWithLabels(f.stats.sthInconsistencies, proofGetFailureLabels)
+	failureMetric = test.CountCounterVecWithLabels(f.stats.sthInconsistencies, proofGetFailureLabels)
 	expectedFailures = 1
 	if failureMetric != expectedFailures {
 		t.Errorf("Expected m.fetcher.stats.sthInconsistencies to be %d, was %d",
 			expectedFailures, failureMetric)
 	}
-	latencySamples = test.MustCountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
+	latencySamples = test.CountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
 	expectedLatencySamples = 1
 	if latencySamples != expectedLatencySamples {
 		t.Errorf("Expected %d m.fetcher.stats.sthProofLatency samples, found %d", expectedLatencySamples, latencySamples)
@@ -206,13 +202,13 @@ func TestVerifySTHConsistency(t *testing.T) {
 	// increment the inconsistencies stat and the number of latency observations
 	f.verifySTHConsistency(first, second)
 	badProofLabels := prometheus.Labels{"uri": logURI, "type": "failed-to-verify-proof"}
-	failureMetric = test.MustCountCounterVecWithLabels(f.stats.sthInconsistencies, badProofLabels)
+	failureMetric = test.CountCounterVecWithLabels(f.stats.sthInconsistencies, badProofLabels)
 	expectedFailures = 1
 	if failureMetric != expectedFailures {
 		t.Errorf("Expected m.fetcher.stats.sthInconsistencies to be %d, was %d",
 			expectedFailures, failureMetric)
 	}
-	latencySamples = test.MustCountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
+	latencySamples = test.CountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
 	expectedLatencySamples++
 	if latencySamples != expectedLatencySamples {
 		t.Errorf("Expected %d m.fetcher.stats.sthProofLatency samples, found %d", expectedLatencySamples, latencySamples)
@@ -225,12 +221,12 @@ func TestVerifySTHConsistency(t *testing.T) {
 	// not increment the inconsistencies stat but it should increment the number
 	// of latency observations
 	f.verifySTHConsistency(first, second)
-	failureMetric = test.MustCountCounterVecWithLabels(f.stats.sthInconsistencies, badProofLabels)
+	failureMetric = test.CountCounterVecWithLabels(f.stats.sthInconsistencies, badProofLabels)
 	if failureMetric != expectedFailures {
 		t.Errorf("Expected m.fetcher.stats.sthInconsistencies to be %d, was %d",
 			expectedFailures, failureMetric)
 	}
-	latencySamples = test.MustCountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
+	latencySamples = test.CountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
 	expectedLatencySamples++
 	if latencySamples != expectedLatencySamples {
 		t.Errorf("Expected %d m.fetcher.stats.sthProofLatency samples, found %d", expectedLatencySamples, latencySamples)

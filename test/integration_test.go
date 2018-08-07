@@ -316,7 +316,7 @@ func TestCertSubmissionSuccess(t *testing.T) {
 
 	assertResultsStat := func(precert bool, status, addr string, expected int, metricsData string) {
 		statRegexp := regexp.MustCompile(
-			fmt.Sprintf(`cert_submit_results{precert="%s",status="%s",uri="http://localhost%s"} ([\d]+)`,
+			fmt.Sprintf(`cert_submit_results{duplicate="false",precert="%s",status="%s",uri="http://localhost%s"} ([\d]+)`,
 				strconv.FormatBool(precert), status, addr))
 		if matches := statRegexp.FindStringSubmatch(metricsData); len(matches) < 2 {
 			t.Errorf("Could not find expected cert_submit_results line in metrics output: \n%s\n",
