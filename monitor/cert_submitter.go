@@ -131,7 +131,7 @@ type certSubmitter struct {
 	submitPreCert bool
 	// Should a final cert be submitted?
 	submitCert bool
-	// Should a already included duplicate cert be submitted
+	// Should an already included duplicate cert be submitted
 	resubmitIncluded bool
 }
 
