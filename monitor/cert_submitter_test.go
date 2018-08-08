@@ -75,7 +75,7 @@ func TestSubmitCertificate(t *testing.T) {
 				SubmitCert:    true,
 				SubmitPreCert: true,
 			},
-		}, l, clk)
+		}, l, l, clk)
 	if err != nil {
 		t.Fatalf("Unexpected error from New(): %s", err.Error())
 	}
@@ -176,16 +176,20 @@ func (dc *dupeClient) GetSTHConsistency(_ context.Context, _ uint64, _ uint64) (
 func TestSubmitIncludedDupe(t *testing.T) {
 	mdb := &storage.MalleableTestDB{}
 	dc := dupeClient{}
-	c := certSubmitter{
-		db:         mdb,
-		logID:      1,
-		logURI:     "test-log",
-		stats:      certStats,
-		certIssuer: &x509.Certificate{Raw: []byte{1, 2, 3}},
-		client:     &dc,
-		logger:     log.New(os.Stdout, "", log.LstdFlags),
-		clk:        clock.New(),
-	}
+	c := newCertSubmitter(
+		monitorCheck{
+			logURI: "test-log",
+			logID:  1,
+			label:  "certSubmitter",
+			clk:    clock.New(),
+			stdout: log.New(os.Stdout, "", log.LstdFlags),
+			stderr: log.New(os.Stdout, "", log.LstdFlags),
+		},
+		&SubmitterOptions{
+			IssuerCert: &x509.Certificate{Raw: []byte{1, 2, 3}},
+		},
+		&dc,
+		mdb)
 
 	testCases := []struct {
 		setup       func()

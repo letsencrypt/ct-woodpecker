@@ -6,8 +6,6 @@ package monitor
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -94,7 +92,8 @@ func (conf MonitorOptions) Valid() error {
 // periodically or submit certs periodically or both depending on whether
 // fetcher and submitter are not nil.
 type Monitor struct {
-	logger *log.Logger
+	stdout *log.Logger
+	stderr *log.Logger
 	clk    clock.Clock
 
 	fetcher          *sthFetcher
@@ -104,7 +103,7 @@ type Monitor struct {
 
 // New creates a Monitor for the given options. The monitor will not be started
 // until Run() is called.
-func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, error) {
+func New(opts MonitorOptions, stdout, stderr *log.Logger, clk clock.Clock) (*Monitor, error) {
 	if err := opts.Valid(); err != nil {
 		return nil, err
 	}
@@ -125,7 +124,7 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 	// when we call the client's `GetSTH` function. If this parameter is nil no
 	// signature check is performed.
 	client, err := ctClient.New(opts.LogURI, hc, jsonclient.Options{
-		Logger:    logger,
+		Logger:    stdout,
 		PublicKey: pubkey,
 	})
 	if err != nil {
@@ -141,70 +140,49 @@ func New(opts MonitorOptions, logger *log.Logger, clk clock.Clock) (*Monitor, er
 	}
 
 	m := &Monitor{
-		logger: logger,
+		stdout: stdout,
+		stderr: stderr,
 		clk:    clk,
 	}
 
+	keyHash := sha256.Sum256([]byte(opts.LogKey))
+	logID := big.NewInt(0).SetBytes(keyHash[:]).Int64()
+
+	// All of the monitor's monitorChecks share these base properties
+	mc := monitorCheck{
+		logURI: opts.LogURI,
+		logID:  logID,
+		clk:    clk,
+		stdout: stdout,
+		stderr: stderr,
+	}
+
 	if opts.FetchOpts != nil {
-		m.fetcher = newSTHFetcher(
-			logger,
-			clk,
-			client,
-			opts.LogURI,
-			opts.FetchOpts.Interval,
-			opts.FetchOpts.Timeout)
+		// Copy the base MC and set the label
+		fetcherMC := mc
+		fetcherMC.label = "sthFetcher"
+		m.fetcher = newSTHFetcher(fetcherMC, opts.FetchOpts, client)
 	}
 
 	if opts.SubmitOpts != nil {
-		m.submitter = &certSubmitter{
-			logger:             logger,
-			clk:                clk,
-			stats:              certStats,
-			client:             client,
-			logURI:             opts.LogURI,
-			stopChannel:        make(chan bool),
-			certSubmitInterval: opts.SubmitOpts.Interval,
-			certSubmitTimeout:  opts.SubmitOpts.Timeout,
-			certIssuer:         opts.SubmitOpts.IssuerCert,
-			certIssuerKey:      opts.SubmitOpts.IssuerKey,
-			submitPreCert:      opts.SubmitOpts.SubmitPreCert,
-			submitCert:         opts.SubmitOpts.SubmitCert,
-			resubmitIncluded:   opts.SubmitOpts.ResubmitIncluded,
-		}
-		if db != nil {
-			keyHash := sha256.Sum256([]byte(opts.LogKey))
-			m.submitter.logID = big.NewInt(0).SetBytes(keyHash[:]).Int64()
-			m.submitter.db = db
-		}
+		submitterMC := mc
+		submitterMC.label = "certSubmitter"
+		m.submitter = newCertSubmitter(submitterMC, opts.SubmitOpts, client, db)
 	}
 
 	if opts.InclusionOpts != nil {
-		keyHash := sha256.Sum256([]byte(opts.LogKey))
-		pkBytes, err := base64.StdEncoding.DecodeString(opts.LogKey)
+		inclusionMC := mc
+		inclusionMC.label = "inclusionChecker"
+		ic, err := newInclusionChecker(
+			inclusionMC,
+			opts.InclusionOpts,
+			client,
+			opts.LogKey,
+			db)
 		if err != nil {
 			return nil, err
 		}
-		pk, err := x509.ParsePKIXPublicKey(pkBytes)
-		if err != nil {
-			return nil, err
-		}
-		sv, err := ct.NewSignatureVerifier(pk)
-		if err != nil {
-			return nil, err
-		}
-		m.inclusionChecker = &inclusionChecker{
-			logger:           logger,
-			client:           client,
-			clk:              clk,
-			logURI:           opts.LogURI,
-			interval:         opts.InclusionOpts.Interval,
-			db:               db,
-			signatureChecker: sv,
-			logID:            big.NewInt(0).SetBytes(keyHash[:]).Int64(),
-			batchSize:        opts.InclusionOpts.FetchBatchSize,
-			maxGetEntries:    opts.InclusionOpts.MaxGetEntries,
-			stopChan:         make(chan bool, 1),
-		}
+		m.inclusionChecker = ic
 	}
 
 	return m, nil
@@ -250,23 +228,4 @@ func (m *Monitor) Stop() {
 	if m.inclusionChecker != nil {
 		m.inclusionChecker.stop()
 	}
-}
-
-// wrapRspErr takes an errors as input and if it is a ctClient.RspError
-// instance it is returned in a wrapped form that prints the HTTP response
-// status and body in the error message. All other error types are passed
-// through unmodified.
-func wrapRspErr(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	// If it is an RspError instance, wrap it
-	if rspErr, ok := err.(ctClient.RspError); ok {
-		return fmt.Errorf("%s HTTP Response Status: %d HTTP Response Body: %q",
-			rspErr.Err, rspErr.StatusCode, string(rspErr.Body))
-	}
-
-	// If it wasn't an RspError instance, return as-is
-	return err
 }

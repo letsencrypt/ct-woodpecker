@@ -3,14 +3,14 @@ package monitor
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/tls"
-	"github.com/jmhodges/clock"
 	"github.com/letsencrypt/ct-woodpecker/storage"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -43,18 +43,45 @@ type inclusionClient interface {
 }
 
 type inclusionChecker struct {
-	logger           *log.Logger
+	monitorCheck
 	client           inclusionClient
-	logURI           string
 	db               storage.Storage
 	signatureChecker *ct.SignatureVerifier
-	clk              clock.Clock
-	logID            int64
 	stopChan         chan bool
 
 	interval      time.Duration
 	batchSize     int64
 	maxGetEntries int64
+}
+
+func newInclusionChecker(
+	mc monitorCheck,
+	opts *InclusionOptions,
+	client inclusionClient,
+	logKey string,
+	storage storage.Storage) (*inclusionChecker, error) {
+	pkBytes, err := base64.StdEncoding.DecodeString(logKey)
+	if err != nil {
+		return nil, err
+	}
+	pk, err := x509.ParsePKIXPublicKey(pkBytes)
+	if err != nil {
+		return nil, err
+	}
+	sv, err := ct.NewSignatureVerifier(pk)
+	if err != nil {
+		return nil, err
+	}
+	return &inclusionChecker{
+		monitorCheck:     mc,
+		client:           client,
+		db:               storage,
+		signatureChecker: sv,
+		stopChan:         make(chan bool, 1),
+		interval:         opts.Interval,
+		batchSize:        opts.FetchBatchSize,
+		maxGetEntries:    opts.MaxGetEntries,
+	}, nil
 }
 
 func (ic *inclusionChecker) run() {
@@ -67,7 +94,7 @@ func (ic *inclusionChecker) run() {
 			case <-ticker.C:
 				err := ic.checkInclusion()
 				if err != nil {
-					ic.logger.Printf("!!! Checking certificate inclusion failed: %s", err)
+					ic.logErrorf("Checking certificate inclusion failed : %s", err)
 				}
 			}
 		}
@@ -75,7 +102,7 @@ func (ic *inclusionChecker) run() {
 }
 
 func (ic *inclusionChecker) stop() {
-	ic.logger.Printf("Stopping %s inclusionChecker", ic.logURI)
+	ic.log("Stopping")
 	ic.stopChan <- true
 }
 
@@ -114,6 +141,7 @@ func (ic *inclusionChecker) checkInclusion() error {
 		return fmt.Errorf("error checking retrieved entries for %q: %s", ic.logURI, err)
 	}
 
+	ic.logf("Updating inclusion index to %d", newHead)
 	err = ic.db.UpdateIndex(ic.logID, newHead)
 	if err != nil {
 		inclusionErrors.WithLabelValues("updateIndex").Inc()
@@ -134,6 +162,7 @@ func (ic *inclusionChecker) getEntries(start, end int64) (int64, []ct.LogEntry, 
 	if ic.maxGetEntries > 0 && end-start > ic.maxGetEntries {
 		end = start + ic.maxGetEntries
 	}
+	ic.logf("Getting entries from %d to %d", start, end)
 	var allEntries []ct.LogEntry
 	for start < end {
 		batchEnd := min(start+ic.batchSize, end)

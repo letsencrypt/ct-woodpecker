@@ -74,7 +74,7 @@ func woodpeckerRun(conf woodpecker.Config, duration time.Duration) (string, stri
 	clk := clock.Default()
 
 	// Create a Woodpecker with the provided monitoring configuration
-	woodpecker, err := woodpecker.New(conf, logger, clk)
+	woodpecker, err := woodpecker.New(conf, logger, logger, clk)
 	if err != nil {
 		return "", "", err
 	}
@@ -424,7 +424,7 @@ func TestCoordinatedSTHOmission(t *testing.T) {
 
 	slowCount, fastCount := 0, 0
 	for _, srv := range testServers {
-		expectedFetchLine := fmt.Sprintf(`sth-fetcher http://localhost%s : Fetching STH`,
+		expectedFetchLine := fmt.Sprintf(`sthFetcher http://localhost%s : Fetching STH`,
 			srv.Addr)
 		fetchLinesCount := strings.Count(stdout, expectedFetchLine)
 
@@ -506,7 +506,7 @@ func TestCoordinatedCertOmission(t *testing.T) {
 	// submissions made monitoring will be skewed!
 	for _, srv := range testServers {
 		expectedPrecertLine := fmt.Sprintf(
-			`Submitting precertificate to "http://localhost%s"`,
+			`certSubmitter http://localhost%s : Submitting precertificate`,
 			srv.Addr)
 		precertLineCount := strings.Count(stdout, expectedPrecertLine)
 		if precertLineCount < 2 {
@@ -515,7 +515,7 @@ func TestCoordinatedCertOmission(t *testing.T) {
 		}
 
 		expectedCertLine := fmt.Sprintf(
-			`Submitting certificate to "http://localhost%s"`,
+			`certSubmitter http://localhost%s : Submitting certificate`,
 			srv.Addr)
 		certLineCount := strings.Count(stdout, expectedCertLine)
 		if certLineCount < 2 {
