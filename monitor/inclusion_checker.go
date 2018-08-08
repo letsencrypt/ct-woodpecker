@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
 
@@ -35,6 +36,7 @@ type InclusionOptions struct {
 	Interval       time.Duration
 	FetchBatchSize int64
 	MaxGetEntries  int64
+	StartIndex     int64
 }
 
 type inclusionClient interface {
@@ -52,6 +54,7 @@ type inclusionChecker struct {
 	interval      time.Duration
 	batchSize     int64
 	maxGetEntries int64
+	startIndex    int64
 }
 
 func newInclusionChecker(
@@ -72,6 +75,23 @@ func newInclusionChecker(
 	if err != nil {
 		return nil, err
 	}
+	if storage == nil {
+		return nil, errors.New("Storage must not be nil")
+	}
+	if opts.StartIndex < 0 {
+		return nil, errors.New("StartIndex must be >= 0")
+	}
+	current, err := storage.GetIndex(mc.logID)
+	if err != nil {
+		return nil, fmt.Errorf("error getting current log index %s", err)
+	}
+	if current < opts.StartIndex {
+		err = storage.UpdateIndex(mc.logID, opts.StartIndex)
+		if err != nil {
+			return nil, fmt.Errorf("error updating current index to start index (%d) : %s",
+				opts.StartIndex, err)
+		}
+	}
 	return &inclusionChecker{
 		monitorCheck:     mc,
 		client:           client,
@@ -81,6 +101,7 @@ func newInclusionChecker(
 		interval:         opts.Interval,
 		batchSize:        opts.FetchBatchSize,
 		maxGetEntries:    opts.MaxGetEntries,
+		startIndex:       opts.StartIndex,
 	}, nil
 }
 
