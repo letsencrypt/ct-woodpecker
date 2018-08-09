@@ -41,7 +41,10 @@ func TestGetEntries(t *testing.T) {
 	mc := malleableClient{
 		GetEntriesFunc: func(_ context.Context, _, _ int64) ([]ct.LogEntry, error) { return nil, errors.New("nop") },
 	}
-
+	mdb := &storage.MalleableTestDB{}
+	mdb.GetIndexFunc = func(int64) (int64, error) {
+		return 0, nil
+	}
 	ic, err := newInclusionChecker(
 		monitorCheck{
 			logURI: "test-log",
@@ -56,7 +59,7 @@ func TestGetEntries(t *testing.T) {
 		},
 		mc,
 		logKey,
-		nil)
+		mdb)
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
@@ -108,6 +111,9 @@ func TestCheckEntries(t *testing.T) {
 	pubKeyBytes, _ := x509.MarshalPKIXPublicKey(&k.PublicKey)
 	keyString := base64.StdEncoding.EncodeToString(pubKeyBytes)
 	mdb := &storage.MalleableTestDB{}
+	mdb.GetIndexFunc = func(int64) (int64, error) {
+		return 0, nil
+	}
 	ic, err := newInclusionChecker(
 		monitorCheck{
 			logURI: "test-log",
@@ -319,8 +325,10 @@ func TestCheckEntries(t *testing.T) {
 func TestCheckInclusion(t *testing.T) {
 	fc := clock.NewFake()
 	mdb := &storage.MalleableTestDB{}
+	mdb.GetIndexFunc = func(int64) (int64, error) {
+		return 0, nil
+	}
 	mc := &malleableClient{}
-
 	ic, err := newInclusionChecker(
 		monitorCheck{
 			logURI: "test-log",
