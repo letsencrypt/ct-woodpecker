@@ -5,14 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	ct "github.com/google/certificate-transparency-go"
 	"github.com/google/trillian/merkle"
 	"github.com/google/trillian/merkle/rfc6962"
-	"github.com/jmhodges/clock"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -86,14 +84,14 @@ type sthFetcherVerifier interface {
 	VerifyConsistencyProof(int64, int64, []byte, []byte, [][]byte) error
 }
 
-// sthFetcher is a type for periodically fetching a log's STH and publishing
+// sthFetcher is a monitorCheck type for periodically fetching a log's STH and publishing
 // metrics about it.
 type sthFetcher struct {
-	logger *log.Logger
-	clk    clock.Clock
+	monitorCheck
+
 	client monitorCTClient
-	logURI string
-	stats  *sthFetchStats
+
+	stats *sthFetchStats
 
 	stopChannel chan bool
 
@@ -116,50 +114,16 @@ type sthFetcher struct {
 
 // newSTHFetcher returns an sthFetcher instance populated based on the provided
 // arguments
-func newSTHFetcher(
-	logger *log.Logger,
-	clk clock.Clock,
-	client monitorCTClient,
-	logURI string,
-	sthFetchInterval time.Duration,
-	sthTimeout time.Duration) *sthFetcher {
+func newSTHFetcher(mc monitorCheck, opts *FetcherOptions, client monitorCTClient) *sthFetcher {
 	return &sthFetcher{
-		logger:           logger,
-		clk:              clk,
+		monitorCheck:     mc,
 		client:           client,
-		logURI:           logURI,
-		sthFetchInterval: sthFetchInterval,
-		sthTimeout:       sthTimeout,
-
-		stats:       sthStats,
-		stopChannel: make(chan bool),
-		verifier:    merkle.NewLogVerifier(rfc6962.DefaultHasher),
+		sthFetchInterval: opts.Interval,
+		sthTimeout:       opts.Timeout,
+		stats:            sthStats,
+		stopChannel:      make(chan bool),
+		verifier:         merkle.NewLogVerifier(rfc6962.DefaultHasher),
 	}
-}
-
-// logErrorf formats a message to the sthFetcher's logger prefixed to identify
-// that an error occurred, that it was an sth-fetcher, and the logURI the error
-// affects
-func (f *sthFetcher) logErrorf(format string, args ...interface{}) {
-	// TODO(@cpu): We should be using os.Stderr here but doing so will mean
-	// changing integration tests. See
-	// https://github.com/letsencrypt/ct-woodpecker/issues/36
-	line := fmt.Sprintf(format, args...)
-	f.logger.Print("[ERROR]", " sth-fetcher ", f.logURI, " : ", line)
-}
-
-// logf formats a message to write to the sthFetcher's logger prefixed to
-// identify the source as an sth-fetcher for a specific logURI
-func (f *sthFetcher) logf(format string, args ...interface{}) {
-	line := fmt.Sprintf(format, args...)
-	f.logger.Print("sth-fetcher ", f.logURI, " : ", line)
-}
-
-// log writes a message to the sthFetcher's logger prefixed to identify the
-// source as an sth-fetcher for a specific logURI. For format string usage see
-// logf.
-func (f *sthFetcher) log(msg string) {
-	f.logger.Printf("sth-fetcher %s : %s\n", f.logURI, msg)
 }
 
 // Run starts the log STH fetching process by creating a goroutine that will loop

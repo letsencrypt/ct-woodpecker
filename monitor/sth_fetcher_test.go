@@ -28,7 +28,7 @@ func TestObserveSTH(t *testing.T) {
 				Interval: fetchDuration,
 				Timeout:  time.Second,
 			},
-		}, l, clk)
+		}, l, l, clk)
 	if err != nil {
 		t.Fatalf("Unexpected error from New(): %s", err.Error())
 	}
@@ -129,7 +129,17 @@ func TestVerifySTHConsistency(t *testing.T) {
 	logURI := "test"
 
 	// Create a fetcher backed by an errorClient
-	f := newSTHFetcher(l, clk, errorClient{}, logURI, fetchInterval, time.Second)
+	f := newSTHFetcher(monitorCheck{
+		logURI: logURI,
+		stdout: l,
+		stderr: l,
+		clk:    clk,
+	},
+		&FetcherOptions{
+			Interval: fetchInterval,
+			Timeout:  time.Second,
+		},
+		errorClient{})
 
 	first := &ct.SignedTreeHead{
 		TreeSize:       1337,

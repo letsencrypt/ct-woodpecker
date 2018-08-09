@@ -7,6 +7,8 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"log"
 	"os"
@@ -39,9 +41,27 @@ func TestGetEntries(t *testing.T) {
 	mc := malleableClient{
 		GetEntriesFunc: func(_ context.Context, _, _ int64) ([]ct.LogEntry, error) { return nil, errors.New("nop") },
 	}
-	ic := inclusionChecker{client: &mc, batchSize: 0}
 
-	_, _, err := ic.getEntries(0, 1)
+	ic, err := newInclusionChecker(
+		monitorCheck{
+			logURI: "test-log",
+			logID:  1,
+			label:  "inclusionChecker",
+			clk:    clock.NewFake(),
+			stdout: log.New(os.Stdout, "", log.LstdFlags),
+			stderr: log.New(os.Stdout, "", log.LstdFlags),
+		},
+		&InclusionOptions{
+			FetchBatchSize: 0,
+		},
+		mc,
+		logKey,
+		nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	_, _, err = ic.getEntries(0, 1)
 	if err == nil {
 		t.Fatal("Expected error when GetEntries failed")
 	}
@@ -51,6 +71,7 @@ func TestGetEntries(t *testing.T) {
 		entries := []ct.LogEntry{{}, {}, {}}
 		return entries[start : end+1], nil
 	}
+	ic.client = mc
 	newHead, entries, err := ic.getEntries(0, 3)
 	if err != nil {
 		t.Fatalf("Expected no error: %s", err)
@@ -68,6 +89,7 @@ func TestGetEntries(t *testing.T) {
 		entries := []ct.LogEntry{{}, {}, {}}
 		return []ct.LogEntry{entries[start]}, nil
 	}
+	ic.client = mc
 	newHead, entries, err = ic.getEntries(0, 3)
 	if err != nil {
 		t.Fatalf("Expected no error: %s", err)
@@ -83,17 +105,28 @@ func TestGetEntries(t *testing.T) {
 func TestCheckEntries(t *testing.T) {
 	fc := clock.NewFake()
 	k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	sv, _ := ct.NewSignatureVerifier(k.Public())
+	pubKeyBytes, _ := x509.MarshalPKIXPublicKey(&k.PublicKey)
+	keyString := base64.StdEncoding.EncodeToString(pubKeyBytes)
 	mdb := &storage.MalleableTestDB{}
-	ic := inclusionChecker{
-		logger:           log.New(os.Stdout, "", log.LstdFlags),
-		clk:              fc,
-		db:               mdb,
-		signatureChecker: sv,
+	ic, err := newInclusionChecker(
+		monitorCheck{
+			logURI: "test-log",
+			logID:  1,
+			label:  "inclusionChecker",
+			clk:    fc,
+			stdout: log.New(os.Stdout, "", log.LstdFlags),
+			stderr: log.New(os.Stdout, "", log.LstdFlags),
+		},
+		&InclusionOptions{},
+		nil,
+		keyString,
+		mdb)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
 	}
 
 	// No matching certs
-	err := ic.checkEntries([]storage.SubmittedCert{
+	err = ic.checkEntries([]storage.SubmittedCert{
 		{Cert: []byte{1, 2}},
 	}, []ct.LogEntry{
 		{
@@ -285,22 +318,30 @@ func TestCheckEntries(t *testing.T) {
 
 func TestCheckInclusion(t *testing.T) {
 	fc := clock.NewFake()
-	k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	sv, _ := ct.NewSignatureVerifier(k.Public())
 	mdb := &storage.MalleableTestDB{}
 	mc := &malleableClient{}
-	ic := inclusionChecker{
-		logger:           log.New(os.Stdout, "", log.LstdFlags),
-		clk:              fc,
-		db:               mdb,
-		client:           mc,
-		signatureChecker: sv,
+
+	ic, err := newInclusionChecker(
+		monitorCheck{
+			logURI: "test-log",
+			logID:  1,
+			label:  "inclusionChecker",
+			clk:    fc,
+			stdout: log.New(os.Stdout, "", log.LstdFlags),
+			stderr: log.New(os.Stdout, "", log.LstdFlags),
+		},
+		&InclusionOptions{},
+		mc,
+		logKey,
+		mdb)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
 	}
 
 	mdb.GetIndexFunc = func(int64) (int64, error) {
 		return 0, errors.New("bad")
 	}
-	err := ic.checkInclusion()
+	err = ic.checkInclusion()
 	if err == nil {
 		t.Fatal("Expected checkInclusion to fail when db.GetIndex failed")
 	}

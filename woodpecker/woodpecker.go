@@ -218,11 +218,12 @@ type Woodpecker struct {
 	metricsServer *http.Server
 }
 
-// New creates a Woodpecker from the provided configuration, logger and clock.
+// New creates a Woodpecker from the provided configuration, stdout logger,
+// stderr logger and clock.
 // If the configuration is invalid or an error occurs initializing the
 // woodpecker it is returned. The returned Woodpecker and its monitors are not
 // started until the Start() function is called.
-func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
+func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 	if err := c.Valid(); err != nil {
 		return nil, err
 	}
@@ -304,7 +305,7 @@ func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 				MaxGetEntries:  c.InclusionConfig.MaxGetEntries,
 			}
 		}
-		m, err := monitor.New(opts, logger, clk)
+		m, err := monitor.New(opts, stdout, stderr, clk)
 		if err != nil {
 			return nil, err
 		}
@@ -312,7 +313,7 @@ func New(c Config, logger *log.Logger, clk clock.Clock) (*Woodpecker, error) {
 	}
 
 	return &Woodpecker{
-		logger:        logger,
+		logger:        stdout,
 		monitors:      monitors,
 		metricsServer: initMetrics(c.MetricsAddr),
 	}, nil

@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
@@ -18,7 +17,6 @@ import (
 	ct "github.com/google/certificate-transparency-go"
 	cttls "github.com/google/certificate-transparency-go/tls"
 	ctx509 "github.com/google/certificate-transparency-go/x509"
-	"github.com/jmhodges/clock"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -106,13 +104,12 @@ func (o SubmitterOptions) Valid() error {
 	return nil
 }
 
-// certSubmitter is a type for periodically issuing certificates and submitting
-// them to a log's add-chain and add-pre-chain endpoints.
+// certSubmitter is a monitorCheck type for periodically issuing certificates
+// and submitting them to a log's add-chain and add-pre-chain endpoints.
 type certSubmitter struct {
-	logger *log.Logger
-	clk    clock.Clock
+	monitorCheck
+
 	client monitorCTClient
-	logURI string
 	logID  int64
 	stats  *certSubmitterStats
 	db     storage.Storage
@@ -135,13 +132,34 @@ type certSubmitter struct {
 	resubmitIncluded bool
 }
 
+func newCertSubmitter(
+	mc monitorCheck,
+	opts *SubmitterOptions,
+	client monitorCTClient,
+	storage storage.Storage) *certSubmitter {
+	return &certSubmitter{
+		monitorCheck:       mc,
+		client:             client,
+		stats:              certStats,
+		db:                 storage,
+		stopChannel:        make(chan bool),
+		certSubmitInterval: opts.Interval,
+		certSubmitTimeout:  opts.Timeout,
+		certIssuer:         opts.IssuerCert,
+		certIssuerKey:      opts.IssuerKey,
+		submitPreCert:      opts.SubmitPreCert,
+		submitCert:         opts.SubmitCert,
+		resubmitIncluded:   opts.ResubmitIncluded,
+	}
+}
+
 // run starts a goroutine that calls submitCertificate, sleeps for
 // certSubmitInterval and then repeats forever.
 func (c *certSubmitter) run() {
 	go func() {
 		for {
 			c.submitCertificates()
-			c.logger.Printf("Sleeping for %s before next certificate submission\n",
+			c.logf("Sleeping for %s before next certificate submission\n",
 				c.certSubmitInterval)
 			select {
 			case <-c.stopChannel:
@@ -153,7 +171,7 @@ func (c *certSubmitter) run() {
 }
 
 func (c *certSubmitter) stop() {
-	c.logger.Printf("Stopping %s certSubmitter", c.logURI)
+	c.log("Stopping")
 	c.stopChannel <- true
 }
 
@@ -185,7 +203,7 @@ func (c *certSubmitter) submitCertificates() {
 	if c.resubmitIncluded {
 		go func() {
 			if err := c.submitIncludedDupe(); err != nil {
-				c.logger.Printf("!!! Error submitting duplicate certificate: %s", err)
+				c.logErrorf("Error submitting duplicate certificate: %s", err)
 			}
 		}()
 	}
@@ -209,7 +227,7 @@ func (c certSubmitter) submit(cert []byte, precert bool) (*ct.SignedCertificateT
 		submissionMethod = c.client.AddPreChain
 		certKind = "precertificate"
 	}
-	c.logger.Printf("Submitting %s to %q\n", certKind, c.logURI)
+	c.logf("Submitting %s\n", certKind)
 
 	start := c.clk.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), c.certSubmitTimeout)
@@ -243,7 +261,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, precert bool) {
 	}
 	sct, err := c.submit(cert.Raw, precert)
 	if err != nil {
-		c.logger.Printf("!!! Error submitting %s to %q: %s\n", certKind, c.logURI, err)
+		c.logErrorf("Error submitting %s : %s\n", certKind, err)
 		c.stats.certSubmitResults.With(failLabels).Inc()
 		return
 	}
@@ -251,7 +269,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, precert bool) {
 	if c.db != nil {
 		sctBytes, err := cttls.Marshal(*sct)
 		if err != nil {
-			c.logger.Printf("!!! Error serializing SCT: %s", err)
+			c.logErrorf("Error serializing SCT: %s", err)
 			c.stats.certStorageFailures.WithLabelValues(c.logURI, "marshalling").Inc()
 			return
 		}
@@ -261,7 +279,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, precert bool) {
 			Timestamp: sct.Timestamp,
 		})
 		if err != nil {
-			c.logger.Printf("!!! Error saving submitted cert: %s", err)
+			c.logErrorf("Error saving submitted %s : %s", certKind, err)
 			c.stats.certStorageFailures.WithLabelValues(c.logURI, "storing").Inc()
 			return
 		}
@@ -275,20 +293,20 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, precert bool) {
 	// future and the past. The SCT's signature & log ID have already been verified by
 	// `m.client.AddChain()`
 	if sctAge > requiredSCTFreshness {
-		c.logger.Printf("!!! Error submitting %s to %q: returned SCT timestamp signed %s in the future (expected <= %s)",
-			certKind, c.logURI, sctAge, requiredSCTFreshness)
+		c.logErrorf("Error submitting : returned SCT timestamp signed %s in the future (expected <= %s)",
+			certKind, sctAge, requiredSCTFreshness)
 		c.stats.certSubmitResults.With(failLabels).Inc()
 		return
 	} else if -sctAge > requiredSCTFreshness {
-		c.logger.Printf("!!! Error submitting %s to %q: returned SCT timestamp signed %s in the past (expected <= %s)",
-			certKind, c.logURI, -sctAge, requiredSCTFreshness)
+		c.logErrorf("Error submitting %s : returned SCT timestamp signed %s in the past (expected <= %s)",
+			certKind, -sctAge, requiredSCTFreshness)
 		c.stats.certSubmitResults.With(failLabels).Inc()
 		return
 	}
 
 	successLabels := prometheus.Labels{"uri": c.logURI, "status": "ok", "precert": strconv.FormatBool(precert), "duplicate": "false"}
 	c.stats.certSubmitResults.With(successLabels).Inc()
-	c.logger.Printf("%s chain submitted to %q. SCT timestamp %s", certKind, c.logURI, ts)
+	c.logf("%s submitted. SCT timestamp %s", certKind, ts)
 }
 
 // submitIncludedDupe resubmits certificates that have already been included in the log

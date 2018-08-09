@@ -344,7 +344,7 @@ func TestNew(t *testing.T) {
 	clk.Set(time.Now())
 
 	// Creating a woodpecker with an invalid config should fail
-	_, err := New(Config{}, l, clk)
+	_, err := New(Config{}, l, l, clk)
 	if err == nil {
 		t.Errorf("expected err calling New() with invalid config, got nil")
 	}
@@ -367,7 +367,7 @@ func TestNew(t *testing.T) {
 			Timeout:  "1s",
 		},
 		Logs: logs,
-	}, l, clk)
+	}, l, l, clk)
 	if err != nil {
 		t.Fatalf("unexpected err calling New(): %s\n", err.Error())
 	}
@@ -398,7 +398,7 @@ func TestNew(t *testing.T) {
 			CertIssuerPath:    "../test/issuer.pem",
 		},
 		Logs: submitLogs,
-	}, l, clk)
+	}, l, l, clk)
 	if err != nil {
 		t.Fatalf("unexpected err calling New(): %s\n", err.Error())
 	}

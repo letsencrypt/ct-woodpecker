@@ -13,8 +13,12 @@ import (
 
 var (
 	clk    clock.Clock = clock.Default()
-	logger *log.Logger = log.New(
+	stdout *log.Logger = log.New(
 		os.Stdout,
+		path.Base(os.Args[0])+" ",
+		log.LstdFlags)
+	stderr *log.Logger = log.New(
+		os.Stderr,
 		path.Base(os.Args[0])+" ",
 		log.LstdFlags)
 )
@@ -33,7 +37,7 @@ func main() {
 	}
 
 	// Create a Woodpecker with the provided monitoring configuration
-	woodpecker, err := woodpecker.New(conf, logger, clk)
+	woodpecker, err := woodpecker.New(conf, stdout, stderr, clk)
 	if err != nil {
 		log.Fatalf("Unable to create ct-woodpecker: %s", err.Error())
 	}
@@ -44,5 +48,5 @@ func main() {
 	// Block the main goroutine waiting for signals while the monitors run in
 	// their own goroutines. WaitForSignal is provided a callback to cleanly
 	// shutdown the metrics HTTP server when a signal is caught.
-	cmd.WaitForSignal(logger, func() { woodpecker.Stop() })
+	cmd.WaitForSignal(stdout, func() { woodpecker.Stop() })
 }
