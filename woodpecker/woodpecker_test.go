@@ -43,6 +43,10 @@ func TestLogConfigValid(t *testing.T) {
 			Config: LogConfig{URI: "https://test.com", Key: "⚷", Start: "0"},
 		},
 		{
+			Name:   "Invalid maximum merge delay",
+			Config: LogConfig{URI: "https://test.com", Key: "⚷", MaximumMergeDelay: -1},
+		},
+		{
 			Name:   "Valid log config",
 			Config: LogConfig{URI: "https://test.com", Key: "⚷"},
 			Valid:  true,
@@ -277,6 +281,7 @@ func TestConfigLoad(t *testing.T) {
     {
       "uri": "https://birch.ct.letsencrypt.org/2018",
       "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
+      "maximum_merge_delay": 1234,
       "submitCert": true
     }
   ]
@@ -318,9 +323,10 @@ func TestConfigLoad(t *testing.T) {
 				},
 				Logs: []LogConfig{
 					{
-						URI:        "https://birch.ct.letsencrypt.org/2018",
-						Key:        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
-						SubmitCert: true,
+						URI:               "https://birch.ct.letsencrypt.org/2018",
+						Key:               "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
+						MaximumMergeDelay: 1234,
+						SubmitCert:        true,
 					},
 				},
 			},

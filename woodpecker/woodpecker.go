@@ -95,6 +95,8 @@ type LogConfig struct {
 	URI string
 	// Base64 encoded public key for the CT log
 	Key string
+	// Maximum merge delay for the log
+	MaximumMergeDelay int `json:"maximum_merge_delay"`
 	// TreeSize to start at when checking for inclusion
 	Start string
 	// Should woodpecker submit certificates to this log every CertSubmitInterval?
@@ -105,7 +107,7 @@ type LogConfig struct {
 
 // Valid checks that a logConfig is valid. If the log has no URI, an invalid
 // URI, or no Key configured then an error is returned.
-func (lc LogConfig) Valid() error {
+func (lc *LogConfig) Valid() error {
 	if lc.URI == "" {
 		return errors.New("log URI must not be empty")
 	}
@@ -124,6 +126,9 @@ func (lc LogConfig) Valid() error {
 		} else if start <= 0 {
 			return errors.New("log start must be > 0 if set")
 		}
+	}
+	if lc.MaximumMergeDelay < 0 {
+		return errors.New("Maximum merge delay must be >= 0 if set")
 	}
 	return nil
 }
@@ -288,10 +293,12 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 
 	var monitors []*monitor.Monitor
 	for _, logConf := range c.Logs {
+		fmt.Printf("MMD in woodpecker new: %d\n", logConf.MaximumMergeDelay)
 		opts := monitor.MonitorOptions{
-			LogURI: logConf.URI,
-			LogKey: logConf.Key,
-			DBURI:  c.DBURI,
+			LogURI:            logConf.URI,
+			LogKey:            logConf.Key,
+			MaximumMergeDelay: logConf.MaximumMergeDelay,
+			DBURI:             c.DBURI,
 		}
 		if c.FetchConfig != nil {
 			opts.FetchOpts = &monitor.FetcherOptions{

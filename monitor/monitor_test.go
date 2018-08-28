@@ -39,8 +39,9 @@ func TestNew(t *testing.T) {
 	// Creating a monitor with vaild configuration should not fail
 	m, err := New(
 		MonitorOptions{
-			LogURI: logURI,
-			LogKey: logKey,
+			LogURI:            logURI,
+			LogKey:            logKey,
+			MaximumMergeDelay: 9999,
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
 				Timeout:  time.Second,
@@ -98,8 +99,9 @@ func TestNew(t *testing.T) {
 	// Creating a monitor with a issuer key and cert should not error
 	m, err = New(
 		MonitorOptions{
-			LogURI: logURI,
-			LogKey: logKey,
+			LogURI:            logURI,
+			LogKey:            logKey,
+			MaximumMergeDelay: 9999,
 			SubmitOpts: &SubmitterOptions{
 				Timeout:       time.Second,
 				Interval:      fetchDuration,
@@ -170,6 +172,7 @@ func (c errorClient) GetSTHConsistency(_ context.Context, _ uint64, _ uint64) ([
 // proof from `GetSTHConsistency`
 type mockClient struct {
 	timestamp time.Time
+	treesize  uint64
 	proof     [][]byte
 }
 
@@ -178,6 +181,7 @@ func (c mockClient) GetSTH(_ context.Context) (*ct.SignedTreeHead, error) {
 	ts := c.timestamp.UnixNano() / int64(time.Millisecond)
 	return &ct.SignedTreeHead{
 		Timestamp: uint64(ts),
+		TreeSize:  c.treesize,
 	}, nil
 }
 
