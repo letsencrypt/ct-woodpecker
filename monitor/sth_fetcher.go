@@ -196,7 +196,7 @@ func (f *sthFetcher) observeSTH() {
 		}
 		return
 	} else if f.prevSTH != nil {
-		go f.verifySTHConsistency(f.prevSTH, newSTH)
+		f.verifySTHConsistency(f.prevSTH, newSTH)
 	}
 
 	f.prevSTH = newSTH

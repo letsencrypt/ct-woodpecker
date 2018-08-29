@@ -267,6 +267,7 @@ func TestStaleSTHHandling(t *testing.T) {
 			Timeout:  time.Second,
 		},
 		errorClient{})
+	f.verifier = mockVerifier{}
 
 	// First return a 2 hour old STH
 	timestampAge := 2 * time.Hour
@@ -294,6 +295,7 @@ func TestStaleSTHHandling(t *testing.T) {
 	f.client = mockClient{
 		timestamp: sthTimestamp,
 		treesize:  20,
+		proof:     [][]byte{{0xFA, 0xCA, 0xDE}},
 	}
 
 	// Observe the STH and verify prevSTH is set correctly
