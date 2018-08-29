@@ -227,7 +227,12 @@ func (log *testLog) getProof(first, second int64) (*trillian.GetConsistencyProof
 		return nil, err
 	}
 
-	proof, err := fetchNodesAndBuildProof(context.Background(), tx, log.activeTree.hasher, tx.ReadRevision(), 0, nodeFetches)
+	readRevision, err := tx.ReadRevision(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	proof, err := fetchNodesAndBuildProof(context.Background(), tx, log.activeTree.hasher, readRevision, 0, nodeFetches)
 	if err != nil {
 		return nil, err
 	}
