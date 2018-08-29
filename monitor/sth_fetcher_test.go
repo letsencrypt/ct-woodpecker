@@ -3,6 +3,7 @@ package monitor
 import (
 	"log"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,8 +23,9 @@ func TestObserveSTH(t *testing.T) {
 
 	m, err := New(
 		MonitorOptions{
-			LogURI: logURI,
-			LogKey: logKey,
+			LogURI:            logURI,
+			LogKey:            logKey,
+			MaximumMergeDelay: 999,
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
 				Timeout:  time.Second,
@@ -240,5 +242,111 @@ func TestVerifySTHConsistency(t *testing.T) {
 	expectedLatencySamples++
 	if latencySamples != expectedLatencySamples {
 		t.Errorf("Expected %d m.fetcher.stats.sthProofLatency samples, found %d", expectedLatencySamples, latencySamples)
+	}
+}
+
+func TestStaleSTHHandling(t *testing.T) {
+	l := log.New(os.Stdout, "", log.LstdFlags)
+	clk := clock.NewFake()
+	clk.Set(time.Now())
+	fetchInterval := time.Second
+	logURI := "test"
+
+	var stdErr test.SafeBuffer
+	stdErrLogger := log.New(&stdErr, "TestStaleSTHHandling", log.LstdFlags)
+
+	f := newSTHFetcher(monitorCheck{
+		logURI:            logURI,
+		stdout:            l,
+		stderr:            stdErrLogger,
+		maximumMergeDelay: defaultMaximumMergeDelay,
+		clk:               clk,
+	},
+		&FetcherOptions{
+			Interval: fetchInterval,
+			Timeout:  time.Second,
+		},
+		errorClient{})
+
+	// First return a 2 hour old STH
+	timestampAge := 2 * time.Hour
+	sthTimestamp := clk.Now().Add(-timestampAge)
+	f.client = mockClient{
+		timestamp: sthTimestamp,
+		treesize:  10,
+	}
+
+	// Observe the STH and verify prevSTH is set correctly
+	f.observeSTH()
+	if f.prevSTH == nil {
+		t.Fatalf("Expected prevSTH to be set")
+	}
+	if f.prevSTH.TreeSize != 10 {
+		t.Errorf("Expected prevSTH to have treesize %d, got %d", 10, f.prevSTH.TreeSize)
+	}
+	if stdErrOut := stdErr.String(); stdErrOut != "" {
+		t.Errorf("Expected stderr to be empty, was %q\n", stdErrOut)
+	}
+
+	// Now return a 1 hour old STH for a larger treesize
+	timestampAge = 1 * time.Hour
+	sthTimestamp = clk.Now().Add(-timestampAge)
+	f.client = mockClient{
+		timestamp: sthTimestamp,
+		treesize:  20,
+	}
+
+	// Observe the STH and verify prevSTH is set correctly
+	f.observeSTH()
+	if f.prevSTH == nil {
+		t.Fatalf("Expected prevSTH to be set")
+	}
+	if f.prevSTH.TreeSize != 20 {
+		t.Errorf("Expected prevSTH to have treesize %d, got %d", 20, f.prevSTH.TreeSize)
+	}
+	if stdErrOut := stdErr.String(); stdErrOut != "" {
+		t.Errorf("Expected stderr to be empty, was %q\n", stdErrOut)
+	}
+
+	// Return a stale STH within the log's MMD.
+	timestampAge = 10 * time.Hour
+	sthTimestamp = clk.Now().Add(-timestampAge)
+	f.client = mockClient{
+		timestamp: sthTimestamp,
+		treesize:  5,
+	}
+
+	// Observe the STH and verify prevSTH is set correctly
+	f.observeSTH()
+	if f.prevSTH == nil {
+		t.Fatalf("Expected prevSTH to be set")
+	}
+	// The prevSTH should still be for treesize 20
+	if f.prevSTH.TreeSize != 20 {
+		t.Errorf("Expected prevSTH to have treesize %d, got %d", 20, f.prevSTH.TreeSize)
+	}
+	if stdErrOut := stdErr.String(); stdErrOut != "" {
+		t.Errorf("Expected stderr to be empty, was %q\n", stdErrOut)
+	}
+
+	// Return a stale STH outside the log's MMD.
+	timestampAge = (24 * time.Hour) * 30
+	sthTimestamp = clk.Now().Add(-timestampAge)
+	f.client = mockClient{
+		timestamp: sthTimestamp,
+		treesize:  1,
+	}
+	// Observe the STH and verify prevSTH is set correctly
+	f.observeSTH()
+	if f.prevSTH == nil {
+		t.Fatalf("Expected prevSTH to be set")
+	}
+	// The prevSTH should still be for treesize 20
+	if f.prevSTH.TreeSize != 20 {
+		t.Errorf("Expected prevSTH to have treesize %d, got %d", 20, f.prevSTH.TreeSize)
+	}
+	// There should be a log line about the MMD
+	if stdErrOut := stdErr.String(); !strings.Contains(stdErrOut, "Fetched stale STH older than log MMD") {
+		t.Errorf("Expected stderr to have stale STH MMD line, got %q", stdErrOut)
 	}
 }

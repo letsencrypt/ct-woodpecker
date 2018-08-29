@@ -20,6 +20,10 @@ import (
 	"github.com/letsencrypt/ct-woodpecker/storage"
 )
 
+// defaultMaximumMergeDelay is the MMD (expressed in seconds) used if the
+// monitored log does not have an explicit MMD from configuration
+const defaultMaximumMergeDelay = 86400
+
 // internetFacingBuckets are histogram buckets suitable for measuring
 // latencies that involve traversing the public internet.
 var internetFacingBuckets = []float64{.1, .25, .5, 1, 2.5, 5, 7.5, 10, 15, 30, 45}
@@ -41,6 +45,10 @@ type MonitorOptions struct {
 	LogURI string
 	// LogKey is the BASE64 encoded DER of the log's public key (No PEM header/footer).
 	LogKey string
+	// MaximumMergeDelay is the fixed amount of time (expressed in seconds) that
+	// the log commits to incorporating a certificate within after returning an
+	// SCT.
+	MaximumMergeDelay int
 
 	DBURI string
 
@@ -67,6 +75,10 @@ func (conf MonitorOptions) Valid() error {
 
 	if conf.LogKey == "" {
 		return errors.New("LogKey must not be empty")
+	}
+
+	if conf.MaximumMergeDelay < 0 {
+		return errors.New("MaximumMergeDelay must be >= 0")
 	}
 
 	if conf.FetchOpts == nil && conf.SubmitOpts == nil {
@@ -148,13 +160,19 @@ func New(opts MonitorOptions, stdout, stderr *log.Logger, clk clock.Clock) (*Mon
 	keyHash := sha256.Sum256([]byte(opts.LogKey))
 	logID := big.NewInt(0).SetBytes(keyHash[:]).Int64()
 
+	mmd := defaultMaximumMergeDelay
+	if opts.MaximumMergeDelay > 0 {
+		mmd = opts.MaximumMergeDelay
+	}
+
 	// All of the monitor's monitorChecks share these base properties
 	mc := monitorCheck{
-		logURI: opts.LogURI,
-		logID:  logID,
-		clk:    clk,
-		stdout: stdout,
-		stderr: stderr,
+		logURI:            opts.LogURI,
+		logID:             logID,
+		maximumMergeDelay: mmd,
+		clk:               clk,
+		stdout:            stdout,
+		stderr:            stderr,
 	}
 
 	if opts.FetchOpts != nil {
