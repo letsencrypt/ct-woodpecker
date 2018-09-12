@@ -113,7 +113,7 @@ func makeTree(name string, key *ecdsa.PrivateKey) (*testTree, error) {
 	}
 
 	treeStorage := memory.NewTreeStorage()
-	logStorage := memory.NewLogStorage(nil, monitoring.InertMetricFactory{})
+	logStorage := memory.NewLogStorage(treeStorage, monitoring.InertMetricFactory{})
 	adminStorage := memory.NewAdminStorage(treeStorage)
 
 	sequencer := log.NewSequencer(hasher, timeSource, logStorage, signer, nil, quota.Noop())
