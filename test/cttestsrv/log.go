@@ -22,6 +22,7 @@ import (
 	"github.com/google/trillian/log"
 	"github.com/google/trillian/merkle"
 	"github.com/google/trillian/merkle/hashers"
+	"github.com/google/trillian/monitoring"
 	"github.com/google/trillian/quota"
 	"github.com/google/trillian/storage"
 	"github.com/google/trillian/storage/memory"
@@ -111,8 +112,9 @@ func makeTree(name string, key *ecdsa.PrivateKey) (*testTree, error) {
 		return nil, err
 	}
 
-	logStorage := memory.NewLogStorage(nil)
-	adminStorage := memory.NewAdminStorage(logStorage)
+	treeStorage := memory.NewTreeStorage()
+	logStorage := memory.NewLogStorage(treeStorage, monitoring.InertMetricFactory{})
+	adminStorage := memory.NewAdminStorage(treeStorage)
 
 	sequencer := log.NewSequencer(hasher, timeSource, logStorage, signer, nil, quota.Noop())
 
