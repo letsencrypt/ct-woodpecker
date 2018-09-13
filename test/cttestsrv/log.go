@@ -62,8 +62,6 @@ type testLog struct {
 
 	treeA *testTree
 	treeB *testTree
-
-	adminStorage storage.AdminStorage
 }
 
 // makeTree constructs a testTree with the given name/description and private
