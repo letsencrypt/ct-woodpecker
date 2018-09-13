@@ -66,7 +66,7 @@ func TestIssueCertificate(t *testing.T) {
 func TestIssueTestCertificate(t *testing.T) {
 	issuerKey, _ := RandKey()
 	issuerCert := &x509.Certificate{}
-	clk := clock.Default()
+	clk := clock.New()
 
 	certPair, err := IssueTestCertificate(issuerKey, issuerCert, clk)
 	if err != nil {
