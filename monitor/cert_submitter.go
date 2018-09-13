@@ -220,8 +220,7 @@ func (c certSubmitter) submit(cert []byte, precert bool) (*ct.SignedCertificateT
 		chain = append(chain, ct.ASN1Cert{Data: c.certIssuer.Raw})
 	}
 
-	var submissionMethod func(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
-	submissionMethod = c.client.AddChain
+	submissionMethod := c.client.AddChain
 	certKind := "certificate"
 	if precert {
 		submissionMethod = c.client.AddPreChain
