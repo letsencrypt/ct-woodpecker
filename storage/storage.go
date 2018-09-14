@@ -133,11 +133,10 @@ func (s *impl) GetIndex(logID int64) (int64, error) {
 	}
 	var index int64
 	defer func() { _ = rows.Close() }()
-	for rows.Next() {
+	if rows.Next() {
 		if err := rows.Scan(&index); err != nil {
 			return 0, err
 		}
-		break
 	}
 	if err := rows.Err(); err != nil {
 		return 0, err

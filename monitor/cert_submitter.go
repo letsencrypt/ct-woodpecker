@@ -220,8 +220,7 @@ func (c certSubmitter) submit(cert []byte, precert bool) (*ct.SignedCertificateT
 		chain = append(chain, ct.ASN1Cert{Data: c.certIssuer.Raw})
 	}
 
-	var submissionMethod func(context.Context, []ct.ASN1Cert) (*ct.SignedCertificateTimestamp, error)
-	submissionMethod = c.client.AddChain
+	submissionMethod := c.client.AddChain
 	certKind := "certificate"
 	if precert {
 		submissionMethod = c.client.AddPreChain
@@ -346,7 +345,7 @@ func (c certSubmitter) submitIncludedDupe() error {
 		c.stats.certStorageFailures.WithLabelValues(c.logURI, "marshalling").Inc()
 		return fmt.Errorf("failed to parse returned SCT: %s", err)
 	}
-	if bytes.Compare(sctBytes, cert.SCT) != 0 {
+	if !bytes.Equal(sctBytes, cert.SCT) {
 		// non-matching SCT, add to database for future inclusion checking
 		err = c.db.AddCert(c.logID, &storage.SubmittedCert{
 			Cert:      cert.Cert,

@@ -229,7 +229,6 @@ func (c *Config) Load(file string) error {
 // is one `monitor.Monitor` for each monitored logs.
 type Woodpecker struct {
 	logger        *log.Logger
-	clk           clock.Clock
 	monitors      []*monitor.Monitor
 	metricsServer *http.Server
 }

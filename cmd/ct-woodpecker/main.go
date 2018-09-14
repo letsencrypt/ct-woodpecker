@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	clk    clock.Clock = clock.Default()
+	clk    clock.Clock = clock.New()
 	stdout *log.Logger = log.New(
 		os.Stdout,
 		path.Base(os.Args[0])+" ",

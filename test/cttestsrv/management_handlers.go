@@ -142,5 +142,4 @@ func (is *IntegrationSrv) switchTreesHandler(w http.ResponseWriter, r *http.Requ
 	_ = is.SwitchTrees()
 	is.logger.Printf("%s %s request completed.", is.Addr, r.URL.Path)
 	w.WriteHeader(http.StatusOK)
-	return
 }
