@@ -275,11 +275,15 @@ func TestSubmitIncludedDupe(t *testing.T) {
 			t.Fatalf("Unexpected error: %s", err)
 		}
 
-		assertCounterVecCount(t, prometheus.Labels{"uri": c.logURI, "status": "ok", "precert": "false", "duplicate": "true"}, tc.submissions+prevSubmissions, c.stats.certSubmitResults)
-		newSCTsCount := test.CountCounter(c.stats.storedSCTs)
-		if newSCTsCount != tc.newSCTs+prevSCTs {
-			t.Fatalf("Expected %d new SCTs, got %d", tc.newSCTs, newSCTsCount-prevSCTs)
-		}
+		assertCounterVecCount(t,
+			prometheus.Labels{"uri": c.logURI, "status": "ok", "precert": "false", "duplicate": "true"},
+			tc.submissions+prevSubmissions,
+			c.stats.certSubmitResults)
+		assertCounterVecCount(t,
+			prometheus.Labels{"uri": c.logURI},
+			tc.newSCTs+prevSCTs,
+			c.stats.storedSCTs)
+
 		prevSubmissions += tc.submissions
 		prevSCTs += tc.newSCTs
 	}
