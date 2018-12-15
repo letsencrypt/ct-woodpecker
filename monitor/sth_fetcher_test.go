@@ -187,6 +187,23 @@ func TestVerifySTHConsistency(t *testing.T) {
 		t.Errorf("Expected %d m.fetcher.stats.sthProofLatency samples, found %d", expectedLatencySamples, latencySamples)
 	}
 
+	// Verifying the consistency between a STHs of treesize zero and
+	// another STH should not increment the inconsistencies stat or the
+	// number of latency observations. To verify STH consistency first must be
+	// 0 < first < second.
+	first.TreeSize = 0
+	f.verifySTHConsistency(first, second)
+	failureMetric = test.CountCounterVecWithLabels(f.stats.sthInconsistencies, inequalHashLabels)
+	if failureMetric != expectedFailures {
+		t.Errorf("Expected m.fetcher.stats.sthInconsistencies to be %d, was %d",
+			expectedFailures, failureMetric)
+	}
+	latencySamples = test.CountHistogramSamplesWithLabels(f.stats.sthProofLatency, latencyLabels)
+	if latencySamples != expectedLatencySamples {
+		t.Errorf("Expected %d m.fetcher.stats.sthProofLatency samples, found %d", expectedLatencySamples, latencySamples)
+	}
+	first.TreeSize = 1337
+
 	// Change the second STH's tree size and hash so there is a reason to fetch a consistency proof
 	second.TreeSize = 7331
 	second.SHA256RootHash = ct.SHA256Hash{0xD1, 0x5B, 0xE1, 0x1E, 0xF}
