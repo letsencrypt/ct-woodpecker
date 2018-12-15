@@ -9,7 +9,7 @@ env:
   - GO111MODULE=on
 
 install:
-  - apt-get install sqlite3
+  - sudo apt-get install sqlite3
   # Install `cover` and `goveralls` without `GO111MODULE` enabled so that we
   # don't download project dependencies and just put the tools in our gobin.
   - GO111MODULE=off go get golang.org/x/tools/cmd/cover
