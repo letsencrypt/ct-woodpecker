@@ -28,6 +28,7 @@ import (
 	"github.com/google/trillian/storage/memory"
 	"github.com/google/trillian/trees"
 	"github.com/google/trillian/types"
+	"github.com/google/trillian/util/clock"
 
 	_ "github.com/google/trillian/crypto/keys/der/proto" // PrivateKey proto handler
 	_ "github.com/google/trillian/crypto/keys/pem/proto" // PEMKeyFile proto handler
@@ -35,7 +36,7 @@ import (
 )
 
 var (
-	timeSource = util.SystemTimeSource{}
+	timeSource = clock.System
 )
 
 // a testTree bundles together in-memory storage, a trillian tree, a hasher and
