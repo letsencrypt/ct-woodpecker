@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -28,6 +29,13 @@ type Personality struct {
 	// If present, sleep for the given number of seconds before replying. Each
 	// request uses the next number in the list, eventually cycling through.
 	LatencySchedule []float64
+
+	// If not empty, WindowStart is a datestamp and any certificates with
+	// a NotBefore earlier than the WindowStart will be rejected by the log.
+	WindowStart string
+	// If not empty, WindowEnd is a datestamp and any certificates with
+	// a NotAfter later than the WindowEnd will be rejected by the log.
+	WindowEnd string
 }
 
 // IntegrationSrv is an instance of a CT test server.
@@ -86,7 +94,25 @@ func NewServer(p Personality, logger *log.Logger) (*IntegrationSrv, error) {
 	if err != nil {
 		return nil, err
 	}
-	testLog, err := newLog(key)
+
+	var windowStart *time.Time
+	var windowEnd *time.Time
+	if p.WindowStart != "" {
+		start, err := time.Parse(time.RFC3339, p.WindowStart)
+		if err != nil {
+			return nil, err
+		}
+		windowStart = &start
+	}
+	if p.WindowEnd != "" {
+		end, err := time.Parse(time.RFC3339, p.WindowEnd)
+		if err != nil {
+			return nil, err
+		}
+		windowEnd = &end
+	}
+
+	testLog, err := newLog(key, windowStart, windowEnd)
 	if err != nil {
 		return nil, err
 	}
@@ -134,8 +160,15 @@ func (is *IntegrationSrv) sleep() {
 // Run starts an IntegrationSrv instance by calling ListenAndServe on the
 // integration server's *http.Server in a dedicated goroutine.
 func (is *IntegrationSrv) Run() {
-	is.logger.Printf("Running cttestsrv instance on %s with pubkey %s",
-		is.Addr, is.PubKey)
+	windowDesc := ""
+	if is.log.windowStart != nil {
+		windowDesc = fmt.Sprintf(" window start %s", is.log.windowStart)
+	}
+	if is.log.windowEnd != nil {
+		windowDesc = fmt.Sprintf("%s window end %s", windowDesc, is.log.windowEnd)
+	}
+	is.logger.Printf("Running cttestsrv instance on %s with pubkey %s%s",
+		is.Addr, is.PubKey, windowDesc)
 	go func() {
 		if err := is.server.ListenAndServe(); err != nil {
 			is.logger.Printf("%s ListenAndServe error: %s", is.Addr, err.Error())

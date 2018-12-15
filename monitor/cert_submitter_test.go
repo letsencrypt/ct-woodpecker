@@ -288,3 +288,99 @@ func TestSubmitIncludedDupe(t *testing.T) {
 		prevSCTs += tc.newSCTs
 	}
 }
+
+func TestSubmitterOptions(t *testing.T) {
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("Failed to generate random key: %v", err)
+	}
+	cert, err := pki.LoadCertificate("../test/issuer.pem")
+	if err != nil {
+		t.Fatalf("Failed to load ../test/issuer.pem: %v", err)
+	}
+	// A bad date range has a start after the end
+	badEnd := time.Now()
+	badStart := badEnd.AddDate(0, 0, 1)
+	// Flipping it gives a good range
+	goodStart := badEnd
+	goodEnd := badStart
+	testCases := []struct {
+		Name          string
+		Opts          SubmitterOptions
+		ExpectedError string
+	}{
+		{
+			Name:          "Zero interval",
+			Opts:          SubmitterOptions{},
+			ExpectedError: "Submitter interval must be > 0",
+		},
+		{
+			Name: "Zero timeout",
+			Opts: SubmitterOptions{
+				Interval: time.Second * 10,
+			},
+			ExpectedError: "Submitter timeout must be > 0",
+		},
+		{
+			Name: "Nil issuer key",
+			Opts: SubmitterOptions{
+				Interval: time.Second * 10,
+				Timeout:  time.Second * 10,
+			},
+			ExpectedError: "IssuerKey must not be nil",
+		},
+		{
+			Name: "Nil issuer cert",
+			Opts: SubmitterOptions{
+				Interval:  time.Second * 10,
+				Timeout:   time.Second * 10,
+				IssuerKey: k,
+			},
+			ExpectedError: "IssuerCert must not be nil",
+		},
+		{
+			Name: "Invalid window",
+			Opts: SubmitterOptions{
+				Interval:    time.Second * 10,
+				Timeout:     time.Second * 10,
+				IssuerKey:   k,
+				IssuerCert:  cert,
+				WindowStart: &badStart,
+				WindowEnd:   &badEnd,
+			},
+			ExpectedError: "WindowEnd must be after WindowStart",
+		},
+		{
+			Name: "Good config, no window",
+			Opts: SubmitterOptions{
+				Interval:   time.Second * 10,
+				Timeout:    time.Second * 10,
+				IssuerKey:  k,
+				IssuerCert: cert,
+			},
+		},
+		{
+			Name: "Good config, with window",
+			Opts: SubmitterOptions{
+				Interval:    time.Second * 10,
+				Timeout:     time.Second * 10,
+				IssuerKey:   k,
+				IssuerCert:  cert,
+				WindowStart: &goodStart,
+				WindowEnd:   &goodEnd,
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			if err := tc.Opts.Valid(); err == nil && tc.ExpectedError != "" {
+				t.Errorf("Expected error %q, got nil", tc.ExpectedError)
+			} else if err != nil && tc.ExpectedError == "" {
+				t.Errorf("Expected no error, got %q", err.Error())
+			} else if err != nil && tc.ExpectedError != "" && err.Error() != tc.ExpectedError {
+				t.Errorf("Expected Opts %#v to have err %v, not %v",
+					tc.Opts, tc.ExpectedError, err)
+			}
+		})
+	}
+}

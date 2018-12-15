@@ -3,6 +3,8 @@
     {
       "Addr": ":4600",
       "PrivKey": "MHcCAQEEIOCtGlGt/WT7471dOHdfBg43uJWJoZDkZAQjWfTitcVNoAoGCCqGSM49AwEHoUQDQgAEYggOxPnPkzKBIhTacSYoIfnSL2jPugcbUKx83vFMvk5gKAz/AGe87w20riuPwEGn229hKVbEKHFB61NIqNHC3Q==",
+      "WindowStart": "2000-01-01T00:00:00Z",
+      "WindowEnd": "2001-01-01T00:00:00Z",
       "LatencySchedule": [
         0.1,
         0.3
@@ -11,6 +13,8 @@
     {
       "Addr": ":4601",
       "PrivKey": "MHcCAQEEIJSCFDYXt2xCIxv+G8BCzGdUsFIQDWEjxfJDfnn9JB5loAoGCCqGSM49AwEHoUQDQgAEKtnFevaXV/kB8dmhCNZHmxKVLcHX1plaAsY9LrKilhYxdmQZiu36LvAvosTsqMVqRK9a96nC8VaxAdaHUbM8EA==",
+      "WindowStart": "2019-01-01T00:00:00Z",
+      "WindowEnd": "2099-01-01T00:00:00Z",
       "LatencySchedule": [
         0.7,
         0.8

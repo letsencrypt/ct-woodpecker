@@ -103,6 +103,16 @@ type LogConfig struct {
 	SubmitCert bool
 	// Should woodpecker submit pre-certificates to this log every CertSubmitInterval?
 	SubmitPreCert bool
+	// For a temporal log shard, the WindowStart is the certificate NotBefore
+	// cutoff. If set and this log's SubmitCert or SubmitPreCert is true any
+	// CertSubmitConfigs will generate a certificate with a validity period
+	// starting after this datestamp.
+	WindowStart string
+	// For a temporal log shard, the WindowEnd is the certificate NotAfter cutoff.
+	// If set and this log's SubmitCert or SubmitPreCert is true any
+	// CertSubmitConfigs will generate a certificate with a validity period ending
+	// before this datestamp.
+	WindowEnd string
 }
 
 // Valid checks that a logConfig is valid. If the log has no URI, an invalid
@@ -129,6 +139,18 @@ func (lc *LogConfig) Valid() error {
 	}
 	if lc.MaximumMergeDelay < 0 {
 		return errors.New("Maximum merge delay must be >= 0 if set")
+	}
+	// If there is a WindowStart it must be a valid timestamp
+	if lc.WindowStart != "" {
+		if _, err := time.Parse(time.RFC3339, lc.WindowStart); err != nil {
+			return errors.New("WindowStart is invalid")
+		}
+	}
+	// If there is a WindowEnd it must be a valid timestamp
+	if lc.WindowEnd != "" {
+		if _, err := time.Parse(time.RFC3339, lc.WindowEnd); err != nil {
+			return errors.New("WindowEnd is invalid")
+		}
 	}
 	return nil
 }
@@ -305,6 +327,16 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 			}
 		}
 		if c.SubmitConfig != nil {
+			var windowStart *time.Time
+			if logConf.WindowStart != "" {
+				start, _ := time.Parse(time.RFC3339, logConf.WindowStart)
+				windowStart = &start
+			}
+			var windowEnd *time.Time
+			if logConf.WindowEnd != "" {
+				end, _ := time.Parse(time.RFC3339, logConf.WindowEnd)
+				windowEnd = &end
+			}
 			opts.SubmitOpts = &monitor.SubmitterOptions{
 				Interval:      certInterval,
 				Timeout:       certTimeout,
@@ -312,6 +344,8 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 				IssuerKey:     issuerKey,
 				SubmitPreCert: logConf.SubmitPreCert,
 				SubmitCert:    logConf.SubmitCert,
+				WindowStart:   windowStart,
+				WindowEnd:     windowEnd,
 			}
 		}
 		if c.InclusionConfig != nil {

@@ -80,6 +80,10 @@ type SubmitterOptions struct {
 	// ResubmitIncluded controls whether or not already included duplicate
 	// certificates are submitted
 	ResubmitIncluded bool
+	// If WindowStart or WindowEnd are not nil submitted certificate validity will
+	// be constrained within the provided window.
+	WindowStart *time.Time
+	WindowEnd   *time.Time
 }
 
 // Valid checks that the SubmitterOptions has a valid positive interval and that
@@ -99,6 +103,10 @@ func (o SubmitterOptions) Valid() error {
 
 	if o.IssuerCert == nil {
 		return errors.New("IssuerCert must not be nil")
+	}
+
+	if o.WindowStart != nil && o.WindowEnd != nil && o.WindowEnd.Before(*o.WindowStart) {
+		return errors.New("WindowEnd must be after WindowStart")
 	}
 
 	return nil
@@ -129,6 +137,10 @@ type certSubmitter struct {
 	submitCert bool
 	// Should an already included duplicate cert be submitted
 	resubmitIncluded bool
+	// If not nil, constrain generated certificate validity to within the provided
+	// window.
+	windowStart *time.Time
+	windowEnd   *time.Time
 }
 
 func newCertSubmitter(
@@ -149,6 +161,8 @@ func newCertSubmitter(
 		submitPreCert:      opts.SubmitPreCert,
 		submitCert:         opts.SubmitCert,
 		resubmitIncluded:   opts.ResubmitIncluded,
+		windowStart:        opts.WindowStart,
+		windowEnd:          opts.WindowEnd,
 	}
 }
 
@@ -185,7 +199,7 @@ func (c *certSubmitter) submitCertificates() {
 		panic("certSubmitter created with nil certIssuerKey or certIssuer\n")
 	}
 
-	certPair, err := pki.IssueTestCertificate(c.certIssuerKey, c.certIssuer, c.clk)
+	certPair, err := pki.IssueTestCertificate(c.certIssuerKey, c.certIssuer, c.clk, c.windowStart, c.windowEnd)
 	if err != nil {
 		// This should not occur and if it does we should abort hard
 		panic(fmt.Sprintf("!!! Error issuing certificate: %s\n", err.Error()))
