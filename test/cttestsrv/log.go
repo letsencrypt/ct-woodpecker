@@ -270,7 +270,7 @@ func (log *testLog) getSTH() (*ct.SignedTreeHead, error) {
 
 	sth := ct.SignedTreeHead{
 		Version:   ct.V1,
-		TreeSize:  uint64(signedLogRoot.TreeSize),
+		TreeSize:  uint64(signedLogRoot.TreeSize) + 1,
 		Timestamp: uint64(signedLogRoot.TimestampNanos / 1000 / 1000),
 	}
 	copy(sth.SHA256RootHash[:], signedLogRoot.RootHash)
