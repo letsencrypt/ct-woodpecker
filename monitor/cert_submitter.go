@@ -27,7 +27,7 @@ type certSubmitterStats struct {
 	certSubmitLatency   *prometheus.HistogramVec
 	certSubmitResults   *prometheus.CounterVec
 	certStorageFailures *prometheus.CounterVec
-	storedSCTs          prometheus.Counter
+	storedSCTs          *prometheus.CounterVec
 }
 
 var (
@@ -51,10 +51,10 @@ var (
 			Name: "cert_storage_failures",
 			Help: "Count of failures to store submitted certificates and their SCTs",
 		}, []string{"uri", "type"}),
-		storedSCTs: promauto.NewCounter(prometheus.CounterOpts{
+		storedSCTs: promauto.NewCounterVec(prometheus.CounterOpts{
 			Name: "stored_scts",
 			Help: "Count of unique SCTs we have retrieved and stored in the database",
-		}),
+		}, []string{"uri"}),
 	}
 )
 
@@ -281,7 +281,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, precert bool) {
 			c.stats.certStorageFailures.WithLabelValues(c.logURI, "storing").Inc()
 			return
 		}
-		c.stats.storedSCTs.Inc()
+		c.stats.storedSCTs.WithLabelValues(c.logURI).Inc()
 	}
 
 	ts := time.Unix(0, int64(sct.Timestamp)*int64(time.Millisecond))
@@ -355,7 +355,7 @@ func (c certSubmitter) submitIncludedDupe() error {
 			c.stats.certStorageFailures.WithLabelValues(c.logURI, "storing").Inc()
 			return fmt.Errorf("failed to store submitted %s: %s", certKind, err)
 		}
-		c.stats.storedSCTs.Inc()
+		c.stats.storedSCTs.WithLabelValues(c.logURI).Inc()
 	}
 
 	return nil
