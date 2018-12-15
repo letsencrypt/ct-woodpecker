@@ -3,13 +3,16 @@ language: go
 sudo: false
 
 go:
-  - "1.10.2"
+  - "1.11.x"
+
+env:
+  - GO111MODULE=on
 
 install:
   - go get golang.org/x/tools/cmd/cover
   - go get github.com/mattn/goveralls
   - go get github.com/kisielk/errcheck
-  - go get ./...
+  - go install -v -mod=vendor ./...
 
 script:
   - go vet ./...
