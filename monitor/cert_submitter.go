@@ -110,7 +110,6 @@ type certSubmitter struct {
 	monitorCheck
 
 	client monitorCTClient
-	logID  int64
 	stats  *certSubmitterStats
 	db     storage.Storage
 
