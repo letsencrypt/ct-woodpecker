@@ -2,17 +2,17 @@
   "metricsAddr": ":1971",
   "dbURI": "file:storage.sqlite",
   "fetchConfig": {
-    "interval": "120s",
-    "timeout": "100s"
+    "interval": "30s",
+    "timeout": "5s"
   },
   "submitConfig": {
-    "interval": "600s",
-    "timeout": "500s",
+    "interval": "60s",
+    "timeout": "5s",
     "certIssuerKeyPath": "test/issuer.key",
     "certIssuerPath": "test/issuer.pem"
   },
   "inclusionConfig": {
-    "interval": "630s",
+    "interval": "120s",
     "fetchBatchSize": 30,
     "maxGetEntries": 30
   },
@@ -20,14 +20,14 @@
     {
       "uri": "http://localhost:4600",
       "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYggOxPnPkzKBIhTacSYoIfnSL2jPugcbUKx83vFMvk5gKAz/AGe87w20riuPwEGn229hKVbEKHFB61NIqNHC3Q==",
-      "maximum_merge_delay": 86399,
+      "maximum_merge_delay": 300,
       "submitPreCert": true,
       "submitCert": true
     },
     {
       "uri": "http://localhost:4601",
       "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEKtnFevaXV/kB8dmhCNZHmxKVLcHX1plaAsY9LrKilhYxdmQZiu36LvAvosTsqMVqRK9a96nC8VaxAdaHUbM8EA==",
-      "maximum_merge_delay": 86399,
+      "maximum_merge_delay": 300,
       "submitPreCert": true,
       "submitCert": true
     }
