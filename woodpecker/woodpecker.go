@@ -292,7 +292,6 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 
 	var monitors []*monitor.Monitor
 	for _, logConf := range c.Logs {
-		fmt.Printf("MMD in woodpecker new: %d\n", logConf.MaximumMergeDelay)
 		opts := monitor.MonitorOptions{
 			LogURI:            logConf.URI,
 			LogKey:            logConf.Key,
