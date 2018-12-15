@@ -152,7 +152,7 @@ func (f *sthFetcher) stop() {
 // since the STH's timestamp is published to the `sth_age` metric. If an error
 // occurs the `sth_failures` metric will be incremented. If the operation
 // succeeds then the `sth_timestamp` gauge will be updated to the returned STH's
-// timestamp. The newly observerd STH will be stored as `f.prevSTH`. If
+// timestamp. The newly observed STH will be stored as `f.prevSTH`. If
 // `f.prevSTH` is not nil, then `observeSTH` will asynchronously validate
 // consistency between `f.prevSTH` and the newly observed STH.
 func (f *sthFetcher) observeSTH() {
@@ -232,7 +232,7 @@ func (f *sthFetcher) verifySTHConsistency(firstSTH, secondSTH *ct.SignedTreeHead
 	// a subsequent tree. The invariant 0 < first < second must hold.
 	if firstTreeSize == 0 {
 		f.logf("first STH is tree size 0. No consistency proof is possible " +
-			"between the emtpy tree STH and another STH")
+			"between the empty tree STH and another STH")
 		return
 	}
 
