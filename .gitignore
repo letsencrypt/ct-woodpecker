@@ -23,8 +23,5 @@ _testmain.go
 *.test
 *.prof
 
-# Vendored deps
-vendor/
-
 # test.json default DBURI
 storage.sqlite
