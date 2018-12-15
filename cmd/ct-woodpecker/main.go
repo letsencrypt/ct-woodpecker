@@ -26,7 +26,7 @@ var (
 func main() {
 	configFile := flag.String(
 		"config",
-		"test/config.json",
+		"test/config/config.json",
 		"JSON ct-woodpekcer configuration file path")
 	flag.Parse()
 
