@@ -9,11 +9,13 @@ env:
   - GO111MODULE=on
 
 install:
+  # Install `cover` and `goveralls` without `GO111MODULE` enabled so that we
+  # don't download project dependencies and just put the tools in our gobin.
   - GO111MODULE=off go get golang.org/x/tools/cmd/cover
   - GO111MODULE=off go get github.com/mattn/goveralls
   - go install -v -mod=vendor ./...
 
 script:
   - go vet -mod=vendor ./...
-  - go test -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
+  - go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
   - goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
