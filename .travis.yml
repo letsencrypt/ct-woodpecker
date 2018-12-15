@@ -16,11 +16,11 @@ install:
   - go install -v -mod=vendor ./...
 
 before_script:
-  - ct-test-srv &
+  - ct-test-srv -config ./test/config/cttestsrv.json &
 
 script:
   - go vet -mod=vendor ./...
   - go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
   - goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
-  - ct-woodpecker &
+  - ct-woodpecker -config ./test/config/config.json &
   - sleep 30s; killall ct-woodpecker
