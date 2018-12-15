@@ -17,20 +17,20 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-var oldestUnseen = promauto.NewGauge(prometheus.GaugeOpts{
+var oldestUnseen = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name: "oldest_unincorporated_cert",
 	Help: "Number of seconds since the oldest SCT that we haven't matched to a log entry was received",
-})
+}, []string{"uri"})
 
-var unseenCount = promauto.NewGauge(prometheus.GaugeOpts{
+var unseenCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name: "unincorporated_certs",
 	Help: "Number of SCTs that haven't been matched to log entries",
-})
+}, []string{"uri"})
 
 var inclusionErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "inclusion_checker_errors",
 	Help: "Number of errors encountered while attempting to check for certificate inclusion",
-}, []string{"type"})
+}, []string{"uri", "type"})
 
 type InclusionOptions struct {
 	Interval       time.Duration
@@ -130,16 +130,16 @@ func (ic *inclusionChecker) stop() {
 func (ic *inclusionChecker) checkInclusion() error {
 	current, err := ic.db.GetIndex(ic.logID)
 	if err != nil {
-		inclusionErrors.WithLabelValues("getIndex").Inc()
+		inclusionErrors.WithLabelValues(ic.logURI, "getIndex").Inc()
 		return fmt.Errorf("error getting current log index for %q: %s", ic.logURI, err)
 	}
 
 	certs, err := ic.db.GetUnseen(ic.logID)
 	if err != nil {
-		inclusionErrors.WithLabelValues("getUnseen").Inc()
+		inclusionErrors.WithLabelValues(ic.logURI, "getUnseen").Inc()
 		return fmt.Errorf("error getting unseen certificates from %q: %s", ic.logURI, err)
 	}
-	unseenCount.Set(float64(len(certs)))
+	unseenCount.WithLabelValues(ic.logURI).Set(float64(len(certs)))
 	if len(certs) == 0 {
 		// nothing to do, don't advance the index
 		return nil
@@ -148,14 +148,14 @@ func (ic *inclusionChecker) checkInclusion() error {
 
 	sth, err := ic.client.GetSTH(context.Background())
 	if err != nil {
-		inclusionErrors.WithLabelValues("getSTH").Inc()
+		inclusionErrors.WithLabelValues(ic.logURI, "getSTH").Inc()
 		return fmt.Errorf("error getting STH from %q: %s", ic.logURI, err)
 	}
 	if sth.TreeSize == 0 {
 		ic.logf("tree size is zero. There are no entries to get to check for inclusion.")
 		return nil
 	}
-	newTreeSize := int64(sth.TreeSize) - 1
+	newTreeSize := int64(sth.TreeSize)
 	if current == newTreeSize {
 		ic.logf("current matches tree size. There are no new entries to check for inclusion.")
 		return nil
@@ -168,22 +168,22 @@ func (ic *inclusionChecker) checkInclusion() error {
 				"Unable to get entries for consistency check", newTreeSize, current)
 		return nil
 	}
-	newHead, entries, err := ic.getEntries(current, int64(sth.TreeSize)-1)
+	newHead, entries, err := ic.getEntries(current, newTreeSize)
 	if err != nil {
-		inclusionErrors.WithLabelValues("getEntries").Inc()
+		inclusionErrors.WithLabelValues(ic.logURI, "getEntries").Inc()
 		return fmt.Errorf("error retrieving entries from %q: %s", ic.logURI, err)
 	}
 
 	seen, oldestAge, err := ic.checkEntries(certs, entries)
 	if err != nil {
-		inclusionErrors.WithLabelValues("checkEntries").Inc()
+		inclusionErrors.WithLabelValues(ic.logURI, "checkEntries").Inc()
 		return fmt.Errorf("error checking retrieved entries for %q: %s", ic.logURI, err)
 	}
 	ic.logf("reduced unseen by %d - oldest unseen cert is %s seconds old.", seen, oldestAge)
 
 	err = ic.db.UpdateIndex(ic.logID, newHead)
 	if err != nil {
-		inclusionErrors.WithLabelValues("updateIndex").Inc()
+		inclusionErrors.WithLabelValues(ic.logURI, "updateIndex").Inc()
 		return fmt.Errorf("error updating current index for %q: %s", ic.logURI, err)
 	}
 
@@ -269,7 +269,7 @@ func (ic *inclusionChecker) checkEntries(certs []storage.SubmittedCert, entries 
 		}
 		oldestTime := time.Unix(int64(oldest/1000), 0)
 		oldestAge = ic.clk.Since(oldestTime)
-		oldestUnseen.Set(oldestAge.Seconds())
+		oldestUnseen.WithLabelValues(ic.logURI).Set(oldestAge.Seconds())
 	}
 
 	return seen, oldestAge, nil
