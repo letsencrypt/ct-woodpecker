@@ -9,11 +9,11 @@ env:
   - GO111MODULE=on
 
 install:
-  - go get golang.org/x/tools/cmd/cover
-  - go get github.com/mattn/goveralls
+  - GO111MODULE=off go get golang.org/x/tools/cmd/cover
+  - GO111MODULE=off go get github.com/mattn/goveralls
   - go install -v -mod=vendor ./...
 
 script:
-  - go vet ./...
+  - go vet -mod=vendor ./...
   - go test -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
   - goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
