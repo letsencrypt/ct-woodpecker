@@ -18,10 +18,16 @@
   },
   "logs": [
     {
-      "uri": "https://birch.ct.letsencrypt.org/2018",
-      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g==",
+      "uri": "http://localhost:4500",
+      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYggOxPnPkzKBIhTacSYoIfnSL2jPugcbUKx83vFMvk5gKAz/AGe87w20riuPwEGn229hKVbEKHFB61NIqNHC3Q==",
       "maximum_merge_delay": 86399,
-      "start": "318848629",
+      "submitPreCert": true,
+      "submitCert": true
+    },
+    {
+      "uri": "http://localhost:4501",
+      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEKtnFevaXV/kB8dmhCNZHmxKVLcHX1plaAsY9LrKilhYxdmQZiu36LvAvosTsqMVqRK9a96nC8VaxAdaHUbM8EA==",
+      "maximum_merge_delay": 86399,
       "submitPreCert": true,
       "submitCert": true
     }
