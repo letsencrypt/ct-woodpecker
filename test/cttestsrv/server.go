@@ -153,7 +153,7 @@ func (is *IntegrationSrv) Shutdown() {
 // the newly activated tree.
 func (is *IntegrationSrv) SwitchTrees() string {
 	newTree := is.log.switchTrees()
-	is.logger.Printf("Switched backing tree to %s", newTree.tree.DisplayName)
+	is.logger.Printf("%s Switched backing tree to %s", is.Addr, newTree.tree.DisplayName)
 	return newTree.tree.DisplayName
 }
 
@@ -208,7 +208,8 @@ func (is *IntegrationSrv) GetEntries(start, end int64) (*ct.GetEntriesResponse, 
 	is.RLock()
 	defer is.RUnlock()
 
-	is.logger.Printf("Getting entries from %d to %d (%d entries)", start, end, (end - start))
+	is.logger.Printf("%s Getting entries from %d to %d (%d entries)",
+		is.Addr, start, end, (end - start))
 	entries, err := is.log.getEntries(start, end)
 	if err != nil {
 		return nil, err
@@ -235,7 +236,8 @@ func (is *IntegrationSrv) GetConsistencyProof(first, second int64) (*ct.GetSTHCo
 	is.RLock()
 	defer is.RUnlock()
 
-	is.logger.Printf("Getting consistency proof from %d to %d", first, second)
+	is.logger.Printf("%s Getting consistency proof from %d to %d",
+		is.Addr, first, second)
 	proof, err := is.log.getProof(first, second)
 	if err != nil {
 		return nil, err
@@ -268,7 +270,8 @@ func (is *IntegrationSrv) AddChain(chain []ct.ASN1Cert, precert bool) (*ct.AddCh
 		return nil, err
 	}
 	atomic.AddInt64(&is.submissions, 1)
-	is.logger.Printf("Queued 1 new chain. %d total submissions.", atomic.LoadInt64(&is.submissions))
+	is.logger.Printf("%s Queued 1 new chain. %d total submissions.",
+		is.Addr, atomic.LoadInt64(&is.submissions))
 
 	// Marshal the SCT's digitally signed signature struct to raw bytes
 	sigBytes, err := cttls.Marshal(sct.Signature)
@@ -293,7 +296,8 @@ func (is *IntegrationSrv) SetSTH(mockSTH *ct.SignedTreeHead) error {
 		return err
 	}
 	is.sth = mockSTH
-	is.logger.Printf("Set STH to provided mock STH: %#v\n", mockSTH)
+	is.logger.Printf("%s Set STH to provided mock STH: %#v\n",
+		is.Addr, mockSTH)
 	return nil
 }
 
@@ -307,7 +311,7 @@ func (is *IntegrationSrv) Integrate(count int64) (int, error) {
 		return 0, err
 	}
 
-	is.logger.Printf("Integrated %d new leave(s)", integratedCount)
+	is.logger.Printf("%s Integrated %d new leave(s)", is.Addr, integratedCount)
 	return integratedCount, nil
 }
 
