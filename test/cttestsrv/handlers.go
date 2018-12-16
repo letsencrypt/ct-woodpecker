@@ -12,6 +12,22 @@ import (
 	"github.com/google/certificate-transparency-go"
 )
 
+func (is *IntegrationSrv) tryServeMock(w http.ResponseWriter, r *http.Request) bool {
+	if mock := is.GetMockResponse(r.URL.Path); mock != nil {
+		response, err := json.Marshal(mock.Response)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return true
+		}
+		is.logger.Printf("%s %s request completed with mock response",
+			is.Addr, r.URL.Path)
+		w.WriteHeader(mock.Code)
+		fmt.Fprintf(w, "%s", response)
+		return true
+	}
+	return false
+}
+
 // getSTHHandler processes GET requests for the CT get-sth endpoint. If no mock
 // STH has been set with the setSTHHandler then the getSTHHandler marshals the
 // currently active testlog tree's STH. If a mock STH has been set then the
@@ -21,6 +37,10 @@ import (
 func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.NotFound(w, r)
+		return
+	}
+
+	if is.tryServeMock(w, r) {
 		return
 	}
 
@@ -52,6 +72,10 @@ func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) 
 func (is *IntegrationSrv) addChainHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.NotFound(w, r)
+		return
+	}
+
+	if is.tryServeMock(w, r) {
 		return
 	}
 
@@ -113,6 +137,10 @@ func (is *IntegrationSrv) getEntriesHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if is.tryServeMock(w, r) {
+		return
+	}
+
 	startArgs, ok := r.URL.Query()["start"]
 	if !ok || len(startArgs) < 1 {
 		http.Error(w, "no start parameter", http.StatusBadRequest)
@@ -163,6 +191,10 @@ func (is *IntegrationSrv) getEntriesHandler(w http.ResponseWriter, r *http.Reque
 func (is *IntegrationSrv) getConsistencyHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.NotFound(w, r)
+		return
+	}
+
+	if is.tryServeMock(w, r) {
 		return
 	}
 

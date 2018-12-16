@@ -20,17 +20,18 @@ services:
         aliases:
           - log-one
           - log-two
+
   ct-woodpecker:
     build:
       context: .
       dockerfile: docker/ct-woodpecker/Dockerfile
-    command: ct-woodpecker -config /test/config/docker.json
-    volumes:
-          - .:/ct-woodpecker-src
-          - ./storage.sqlite:/var/ct-woodpecker/storage.sqlite
+    command: ct-woodpecker -config /test/config/ct-woodpecker.docker.json
     ports:
       # Prometheus metrics
       - 1971:1971
+    volumes:
+          - .:/ct-woodpecker-src
+          - ./storage.sqlite:/var/ct-woodpecker/storage.sqlite
     networks:
       ctnet:
         ipv4_address: 10.40.50.3
@@ -38,23 +39,45 @@ services:
           - woodpecker
     depends_on:
       - ct-test-srv
+
   prometheus:
     image: prom/prometheus:v2.1.0
-    volumes:
-      - ./test/config/prometheus.yml/:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
     ports:
+      # Prometheus UI
       - 9090:9090
+    volumes:
+      - ./test/config/prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
     depends_on:
       - ct-woodpecker
+      - alertmanager
     networks:
       ctnet:
         ipv4_address: 10.40.50.4
+
+  alertmanager:
+    image: prom/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      # Alertmanager API
+      - 9093:9093
+    volumes:
+      - ./test/config/prometheus/alertmanager.yml:/etc/alertmanager/config.yml
+    networks:
+      ctnet:
+        ipv4_address: 10.40.50.5
+        aliases:
+          - alertmanager
+    depends_on:
+      # webhook alert target
+      - ct-test-srv
 
 networks:
   ctnet:

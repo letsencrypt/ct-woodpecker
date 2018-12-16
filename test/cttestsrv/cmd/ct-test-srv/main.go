@@ -40,7 +40,7 @@ func main() {
 		log.LstdFlags)
 
 	// Load the configuration specified on the command line
-	configFile := flag.String("config", "", "Path to config file.")
+	configFile := flag.String("config", "test/config/cttestsrv.json", "Path to config file.")
 	flag.Parse()
 	if *configFile == "" {
 		logger.Fatal("You must specify a -config file")
