@@ -1,0 +1,65 @@
+version: '3'
+
+volumes:
+    prometheus_data: {}
+
+services:
+  ct-test-srv:
+    build:
+      context: .
+      dockerfile: docker/ct-test-srv/Dockerfile
+    command: ct-test-srv -config /test/config/cttestsrv.json
+    ports:
+      # Log One
+      - 4600:4600
+      # Log Two
+      - 4601:4601
+    networks:
+      ctnet:
+        ipv4_address: 10.40.50.2
+        aliases:
+          - log-one
+          - log-two
+  ct-woodpecker:
+    build:
+      context: .
+      dockerfile: docker/ct-woodpecker/Dockerfile
+    command: ct-woodpecker -config /test/config/docker.json
+    volumes:
+          - .:/ct-woodpecker-src
+          - ./storage.sqlite:/var/ct-woodpecker/storage.sqlite
+    ports:
+      # Prometheus metrics
+      - 1971:1971
+    networks:
+      ctnet:
+        ipv4_address: 10.40.50.3
+        aliases:
+          - woodpecker
+    depends_on:
+      - ct-test-srv
+  prometheus:
+    image: prom/prometheus:v2.1.0
+    volumes:
+      - ./test/config/prometheus.yml/:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - 9090:9090
+    depends_on:
+      - ct-woodpecker
+    networks:
+      ctnet:
+        ipv4_address: 10.40.50.4
+
+networks:
+  ctnet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.40.50.0/24
