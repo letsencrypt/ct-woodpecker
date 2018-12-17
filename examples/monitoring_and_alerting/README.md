@@ -5,12 +5,17 @@ These files are updated on a best-effort basis.
 
 - - - -
 # Grafana
-![](imgs/grafana.png)
-Tested with Grafana v5.
+![](imgs/grafana-dashboard.png)
 
-The `datasource` variable referenced in `dashboard.json` can be configured in grafana after importing `dashboard.json`.
+Tested with Grafana v5.X.
+
+The `datasource` variable referenced in `dashboard.json` can be configured in grafana after importing `dashboard.json` per the following images.
+![](imgs/grafana-config-1.png)
+![](imgs/grafana-config-2.png)
+![](imgs/grafana-config-3.png)
 
 - - - -
 # Prometheus and Alertmanager
 ![](imgs/prometheus.png)
+
 Tested with Prometheus v2 and Alertmanager v0.16.
