@@ -7,25 +7,25 @@ groups:
     labels:
       severity: warning
     annotations:
-      description:  'Errors retrieving STH from log'
+      description:  'Errors retrieving STH from log {{ $labels.uri }}'
   - alert: STHInconsistencyErrors
     expr: sum by (uri) (rate(sth_inconsistencies[1m])) > 0
     for: 5m
     labels:
       severity: warning
     annotations:
-      description:  'Errors verifying STH to STH consistency from log'
+      description:  'Errors verifying STH to STH consistency from log {{ $labels.uri }}'
   - alert: OldSTH
     expr: sum by (uri) (sth_age) > 43200 # 43200s = 12h, which is half of the Maximum Merge Delay allowed by the Chrome ct_policy
     for: 1m
     labels:
       severity: critical
     annotations:
-      description: 'Currently served STH was created more than 12 hours ago'
+      description: 'Currently served STH was created more than 12 hours ago from log {{ $labels.uri }}'
   - alert: CertSubmissionErrors
     expr: sum by (uri, precert) (rate(cert_submit_results{status="fail"}[1m])) > 0
     for: 5m
     labels:
       severity: warning
     annotations:
-      description: 'Errors submitting pre-certificates/certificates to log'
+      description: 'Errors submitting pre-certificates/certificates to log {{ $labels.uri }}'
