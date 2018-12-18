@@ -10,7 +10,8 @@ env:
 
 install:
   # Install `cover` and `goveralls` without `GO111MODULE` enabled so that we
-  # don't download project dependencies and just put the tools in our gobin.
+  # don't download ct-woodpecker dependencies and just put the tools in our
+  # gobin.
   - GO111MODULE=off go get golang.org/x/tools/cmd/cover
   - GO111MODULE=off go get github.com/mattn/goveralls
   - go install -v -mod=vendor ./...
