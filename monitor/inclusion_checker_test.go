@@ -132,7 +132,7 @@ func TestCheckEntries(t *testing.T) {
 	}
 
 	// No matching certs
-	err = ic.checkEntries([]storage.SubmittedCert{
+	_, _, err = ic.checkEntries([]storage.SubmittedCert{
 		{Cert: []byte{1, 2}},
 	}, []ct.LogEntry{
 		{
@@ -145,7 +145,7 @@ func TestCheckEntries(t *testing.T) {
 	}
 
 	// Matching cert, invalid SCT
-	err = ic.checkEntries([]storage.SubmittedCert{
+	_, _, err = ic.checkEntries([]storage.SubmittedCert{
 		{Cert: []byte{1, 2, 3}, SCT: []byte{255, 255, 255}},
 	}, []ct.LogEntry{
 		{
@@ -159,7 +159,7 @@ func TestCheckEntries(t *testing.T) {
 
 	// Matching cert, wrong SCT
 	sct, _ := cttls.Marshal(ct.SignedCertificateTimestamp{Timestamp: 1234})
-	err = ic.checkEntries([]storage.SubmittedCert{
+	_, _, err = ic.checkEntries([]storage.SubmittedCert{
 		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 123},
 	}, []ct.LogEntry{
 		{
@@ -173,7 +173,7 @@ func TestCheckEntries(t *testing.T) {
 
 	// Matching cert, SCT with invalid signature
 	sct, _ = cttls.Marshal(ct.SignedCertificateTimestamp{Timestamp: 1234})
-	err = ic.checkEntries([]storage.SubmittedCert{
+	_, _, err = ic.checkEntries([]storage.SubmittedCert{
 		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 1234},
 	}, []ct.LogEntry{
 		{
@@ -219,7 +219,7 @@ func TestCheckEntries(t *testing.T) {
 	mdb.MarkCertSeenFunc = func(_ int, _ time.Time) error {
 		return errors.New("nop")
 	}
-	err = ic.checkEntries([]storage.SubmittedCert{
+	_, _, err = ic.checkEntries([]storage.SubmittedCert{
 		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 1234},
 	}, []ct.LogEntry{
 		{
@@ -239,7 +239,7 @@ func TestCheckEntries(t *testing.T) {
 	mdb.MarkCertSeenFunc = func(_ int, _ time.Time) error {
 		return nil
 	}
-	err = ic.checkEntries([]storage.SubmittedCert{
+	_, _, err = ic.checkEntries([]storage.SubmittedCert{
 		{Cert: []byte{1, 2, 3}, SCT: sct},
 	}, []ct.LogEntry{
 		{
@@ -282,7 +282,7 @@ func TestCheckEntries(t *testing.T) {
 		Timestamp:  1234,
 		Signature:  digitallySigned,
 	})
-	err = ic.checkEntries([]storage.SubmittedCert{
+	_, _, err = ic.checkEntries([]storage.SubmittedCert{
 		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 1234},
 	}, []ct.LogEntry{
 		{
@@ -306,9 +306,9 @@ func TestCheckEntries(t *testing.T) {
 	}
 
 	// Check oldest_unincorporated_cert is properly set
-	oldestUnseen.Set(0)
+	oldestUnseen.WithLabelValues("test-log").Set(0)
 	fc.Add(time.Hour)
-	err = ic.checkEntries([]storage.SubmittedCert{
+	_, _, err = ic.checkEntries([]storage.SubmittedCert{
 		{Cert: []byte{1, 2, 3}, SCT: sct, Timestamp: 1234},
 		{Cert: []byte{1, 2, 3, 4}, SCT: sct, Timestamp: 1234},
 	}, []ct.LogEntry{})
@@ -316,7 +316,7 @@ func TestCheckEntries(t *testing.T) {
 		t.Fatalf("Unexpected error: %s", err)
 	}
 	var metric dto.Metric
-	_ = oldestUnseen.Write(&metric)
+	_ = oldestUnseen.WithLabelValues("test-log").Write(&metric)
 	if metric.Gauge.GetValue() != 3599 {
 		t.Fatalf("Unexpected oldest_unincorporated_cert value, expected: 9223372036.854776, got: %f", *metric.Gauge.Value)
 	}

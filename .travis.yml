@@ -1,6 +1,6 @@
 language: go
 
-sudo: false
+sudo: true
 
 go:
   - "1.11.x"
@@ -9,6 +9,7 @@ env:
   - GO111MODULE=on
 
 install:
+  - sudo apt-get install sqlite3
   # Install `cover` and `goveralls` without `GO111MODULE` enabled so that we
   # don't download ct-woodpecker dependencies and just put the tools in our
   # gobin.
@@ -16,7 +17,13 @@ install:
   - GO111MODULE=off go get github.com/mattn/goveralls
   - go install -v -mod=vendor ./...
 
+before_script:
+  - ct-test-srv -config ./test/config/cttestsrv.json &
+  - cat ./storage/schema.sql | sqlite3 ./storage.sqlite
+
 script:
   - go vet -mod=vendor ./...
   - go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
   - goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
+  - ct-woodpecker -config ./test/config/config.json &
+  - sleep 30s; killall ct-woodpecker

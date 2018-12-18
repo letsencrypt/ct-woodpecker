@@ -14,6 +14,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"time"
 
 	"github.com/jmhodges/clock"
 )
@@ -99,15 +100,26 @@ type CertificatePair struct {
 
 // IssueTestCertificate uses the monitor's certIssuer and certIssuerKey to generate
 // a precertificate and a matching final leaf-certificate that can be submitted
-// to a log.The certificate's subject common name will be a random subdomain
-// based on the certificate serial under the `testCertDomain` domain. This
-// function creates certificates that will be submitted to public logs and so
-// while they are not issued by a trusted root  we try to avoid cablint errors
-// to avoid requiring log monitors special-case our submissions.
+// to a log. The certificate's subject common name will be a random subdomain
+// based on the certificate serial under the `testCertDomain` domain.
+//
+// If windowStart is nil the certificate NotBefore will be set to the current
+// time based on the provided clock. If windowStart is not nil then the
+// certificate NotBefore will be set to the windowStart plus one day.
+
+// If windowEnd is nil the certificate NotAfter will be set to 90 days after the
+// current time based on the provided clock. If windowEnd is not nil then the
+// certificate NotAfter will be set to the windowEnd minus one day.
+//
+// This function creates certificates that will be submitted to public logs and
+// so while they are not issued by a trusted root  we try to avoid cablint
+// errors to avoid requiring log monitors special-case our submissions.
 func IssueTestCertificate(
 	issuerKey *ecdsa.PrivateKey,
 	issuerCert *x509.Certificate,
-	clk clock.Clock) (CertificatePair, error) {
+	clk clock.Clock,
+	windowStart *time.Time,
+	windowEnd *time.Time) (CertificatePair, error) {
 
 	certKey, err := RandKey()
 	if err != nil {
@@ -116,6 +128,18 @@ func IssueTestCertificate(
 	serial, err := RandSerial()
 	if err != nil {
 		return CertificatePair{}, err
+	}
+
+	earliest := clk.Now()
+	latest := earliest.AddDate(0, 0, 90)
+
+	if windowStart != nil {
+		earliest = *windowStart
+		earliest.AddDate(0, 0, 1)
+	}
+	if windowEnd != nil {
+		latest = *windowEnd
+		latest.AddDate(0, 0, -1)
 	}
 
 	domain := hex.EncodeToString(serial.Bytes()[:5]) + testCertDomain
@@ -127,12 +151,12 @@ func IssueTestCertificate(
 			},
 			DNSNames:              []string{domain},
 			SerialNumber:          serial,
-			NotBefore:             clk.Now(),
-			NotAfter:              clk.Now().AddDate(0, 0, 90),
+			NotBefore:             earliest,
+			NotAfter:              latest.AddDate(0, 0, -1),
 			KeyUsage:              x509.KeyUsageDigitalSignature,
 			ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 			BasicConstraintsValid: true,
-			IsCA: false,
+			IsCA:                  false,
 			IssuingCertificateURL: []string{"http://issuer" + testCertDomain},
 			CRLDistributionPoints: []string{"http://crls" + testCertDomain},
 		}

@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/jmhodges/clock"
 )
@@ -68,7 +69,7 @@ func TestIssueTestCertificate(t *testing.T) {
 	issuerCert := &x509.Certificate{}
 	clk := clock.New()
 
-	certPair, err := IssueTestCertificate(issuerKey, issuerCert, clk)
+	certPair, err := IssueTestCertificate(issuerKey, issuerCert, clk, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error from IssueTestCertificate: %s", err.Error())
 	}
@@ -160,5 +161,98 @@ func TestIssueTestCertificate(t *testing.T) {
 	}
 	if findCTPoison(certPair.Cert) {
 		t.Errorf("Cert had unexpected CT Poision Extension ID")
+	}
+}
+
+func TestIssueTestCertificateWindow(t *testing.T) {
+	issuerKey, _ := RandKey()
+	issuerCert := &x509.Certificate{}
+	clk := clock.New()
+
+	// Issue a cert pair with nil WindowStart and WindowEnd
+	certPair, err := IssueTestCertificate(issuerKey, issuerCert, clk, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from IssueTestCertificate: %s", err.Error())
+	}
+
+	if certPair.PreCert == nil {
+		t.Fatalf("unexpected nil PreCert in CertPair returned from IssueTestCertificate")
+	}
+
+	if certPair.Cert == nil {
+		t.Fatalf("unexpected nil Cert in CertPair returned from IssueTestCertificate")
+	}
+
+	shortFormat := func(t time.Time) string {
+		return t.Format("2006-01-02")
+	}
+
+	// Check that the precert notbefore/notafter match defaults
+	now := shortFormat(clk.Now())
+	defaultNotAfter := shortFormat(clk.Now().AddDate(0, 0, 89))
+	notBefore := shortFormat(certPair.PreCert.NotBefore)
+	notAfter := shortFormat(certPair.PreCert.NotAfter)
+	if notBefore != now {
+		t.Errorf("preCert notBefore was %q, expected %q",
+			notBefore, now)
+	}
+	if notAfter != defaultNotAfter {
+		t.Errorf("preCert notAfter was %q, expected %q",
+			notAfter, defaultNotAfter)
+	}
+
+	// Check that the cert notbefore/notafter match defaults
+	notBefore = shortFormat(certPair.Cert.NotBefore)
+	notAfter = shortFormat(certPair.Cert.NotAfter)
+	if notBefore != now {
+		t.Errorf("cert notBefore was %q, expected %q",
+			notBefore, now)
+	}
+	if notAfter != defaultNotAfter {
+		t.Errorf("cert notAfter was %q, expected %q",
+			notAfter, defaultNotAfter)
+	}
+
+	windowStart, _ := time.Parse(time.RFC3339, "2000-01-01T00:00:00Z")
+	windowEnd, _ := time.Parse(time.RFC3339, "2001-01-01T00:00:00Z")
+
+	// Issue a cert pair with specific WindowStart and WindowEnd
+	certPair, err = IssueTestCertificate(issuerKey, issuerCert, clk, &windowStart, &windowEnd)
+	if err != nil {
+		t.Fatalf("unexpected error from IssueTestCertificate: %s", err.Error())
+	}
+
+	if certPair.PreCert == nil {
+		t.Fatalf("unexpected nil PreCert in CertPair returned from IssueTestCertificate")
+	}
+
+	if certPair.Cert == nil {
+		t.Fatalf("unexpected nil Cert in CertPair returned from IssueTestCertificate")
+	}
+
+	expectedStartDate := shortFormat(windowStart)
+	expectedEndDate := shortFormat(windowEnd.AddDate(0, 0, -1))
+
+	// Check the precert notbefore/notafter match expected
+	notBefore = shortFormat(certPair.PreCert.NotBefore)
+	notAfter = shortFormat(certPair.PreCert.NotAfter)
+	if notBefore != expectedStartDate {
+		t.Errorf("preCert notBefore was %q, expected %q",
+			notBefore, expectedStartDate)
+	}
+	if notAfter != expectedEndDate {
+		t.Errorf("preCert notAfter was %q, expected %q",
+			notAfter, expectedEndDate)
+	}
+	// Check that the cert notbefore/notafter match expected
+	notBefore = shortFormat(certPair.Cert.NotBefore)
+	notAfter = shortFormat(certPair.Cert.NotAfter)
+	if notBefore != expectedStartDate {
+		t.Errorf("cert notBefore was %q, expected %q",
+			notBefore, expectedStartDate)
+	}
+	if notAfter != expectedEndDate {
+		t.Errorf("cert notAfter was %q, expected %q",
+			notAfter, expectedEndDate)
 	}
 }

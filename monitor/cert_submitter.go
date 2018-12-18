@@ -27,7 +27,7 @@ type certSubmitterStats struct {
 	certSubmitLatency   *prometheus.HistogramVec
 	certSubmitResults   *prometheus.CounterVec
 	certStorageFailures *prometheus.CounterVec
-	storedSCTs          prometheus.Counter
+	storedSCTs          *prometheus.CounterVec
 }
 
 var (
@@ -51,10 +51,10 @@ var (
 			Name: "cert_storage_failures",
 			Help: "Count of failures to store submitted certificates and their SCTs",
 		}, []string{"uri", "type"}),
-		storedSCTs: promauto.NewCounter(prometheus.CounterOpts{
+		storedSCTs: promauto.NewCounterVec(prometheus.CounterOpts{
 			Name: "stored_scts",
 			Help: "Count of unique SCTs we have retrieved and stored in the database",
-		}),
+		}, []string{"uri"}),
 	}
 )
 
@@ -80,6 +80,10 @@ type SubmitterOptions struct {
 	// ResubmitIncluded controls whether or not already included duplicate
 	// certificates are submitted
 	ResubmitIncluded bool
+	// If WindowStart or WindowEnd are not nil submitted certificate validity will
+	// be constrained within the provided window.
+	WindowStart *time.Time
+	WindowEnd   *time.Time
 }
 
 // Valid checks that the SubmitterOptions has a valid positive interval and that
@@ -101,6 +105,10 @@ func (o SubmitterOptions) Valid() error {
 		return errors.New("IssuerCert must not be nil")
 	}
 
+	if o.WindowStart != nil && o.WindowEnd != nil && o.WindowEnd.Before(*o.WindowStart) {
+		return errors.New("WindowEnd must be after WindowStart")
+	}
+
 	return nil
 }
 
@@ -110,7 +118,6 @@ type certSubmitter struct {
 	monitorCheck
 
 	client monitorCTClient
-	logID  int64
 	stats  *certSubmitterStats
 	db     storage.Storage
 
@@ -130,6 +137,10 @@ type certSubmitter struct {
 	submitCert bool
 	// Should an already included duplicate cert be submitted
 	resubmitIncluded bool
+	// If not nil, constrain generated certificate validity to within the provided
+	// window.
+	windowStart *time.Time
+	windowEnd   *time.Time
 }
 
 func newCertSubmitter(
@@ -150,6 +161,8 @@ func newCertSubmitter(
 		submitPreCert:      opts.SubmitPreCert,
 		submitCert:         opts.SubmitCert,
 		resubmitIncluded:   opts.ResubmitIncluded,
+		windowStart:        opts.WindowStart,
+		windowEnd:          opts.WindowEnd,
 	}
 }
 
@@ -186,7 +199,7 @@ func (c *certSubmitter) submitCertificates() {
 		panic("certSubmitter created with nil certIssuerKey or certIssuer\n")
 	}
 
-	certPair, err := pki.IssueTestCertificate(c.certIssuerKey, c.certIssuer, c.clk)
+	certPair, err := pki.IssueTestCertificate(c.certIssuerKey, c.certIssuer, c.clk, c.windowStart, c.windowEnd)
 	if err != nil {
 		// This should not occur and if it does we should abort hard
 		panic(fmt.Sprintf("!!! Error issuing certificate: %s\n", err.Error()))
@@ -282,7 +295,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, precert bool) {
 			c.stats.certStorageFailures.WithLabelValues(c.logURI, "storing").Inc()
 			return
 		}
-		c.stats.storedSCTs.Inc()
+		c.stats.storedSCTs.WithLabelValues(c.logURI).Inc()
 	}
 
 	ts := time.Unix(0, int64(sct.Timestamp)*int64(time.Millisecond))
@@ -356,7 +369,7 @@ func (c certSubmitter) submitIncludedDupe() error {
 			c.stats.certStorageFailures.WithLabelValues(c.logURI, "storing").Inc()
 			return fmt.Errorf("failed to store submitted %s: %s", certKind, err)
 		}
-		c.stats.storedSCTs.Inc()
+		c.stats.storedSCTs.WithLabelValues(c.logURI).Inc()
 	}
 
 	return nil

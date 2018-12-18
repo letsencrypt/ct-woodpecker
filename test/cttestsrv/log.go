@@ -63,6 +63,9 @@ type testLog struct {
 
 	treeA *testTree
 	treeB *testTree
+
+	windowStart *time.Time
+	windowEnd   *time.Time
 }
 
 // makeTree constructs a testTree with the given name/description and private
@@ -165,8 +168,9 @@ func initSTH(tt *testTree) error {
 	return nil
 }
 
-// newLog creates a new testLog with the given private key.
-func newLog(key *ecdsa.PrivateKey) (*testLog, error) {
+// newLog creates a new testLog with the given private key and optional window
+// start/end times.
+func newLog(key *ecdsa.PrivateKey, windowStart, windowEnd *time.Time) (*testLog, error) {
 	treeA, err := makeTree("treeA", key)
 	if err != nil {
 		return nil, err
@@ -182,6 +186,9 @@ func newLog(key *ecdsa.PrivateKey) (*testLog, error) {
 		treeB:      treeB,
 
 		key: key,
+
+		windowStart: windowStart,
+		windowEnd:   windowEnd,
 	}, nil
 }
 
@@ -302,6 +309,25 @@ func (log *testLog) addChain(chain []ct.ASN1Cert, precert bool) (*ct.SignedCerti
 	entryType := ct.X509LogEntryType
 	if precert {
 		entryType = ct.PrecertLogEntryType
+	}
+
+	cert, err := x509.ParseCertificate(chain[0].Data)
+	if err != nil {
+		return nil, err
+	}
+	if log.windowStart != nil {
+		if cert.NotBefore.Before(*log.windowStart) {
+			return nil, fmt.Errorf(
+				"cert not before %q is outside log window start %q",
+				cert.NotBefore, *log.windowStart)
+		}
+	}
+	if log.windowEnd != nil {
+		if cert.NotAfter.After(*log.windowEnd) {
+			return nil, fmt.Errorf(
+				"cert not after %q is outside log window end %q",
+				cert.NotAfter, *log.windowEnd)
+		}
 	}
 
 	now := timeSource.Now()
