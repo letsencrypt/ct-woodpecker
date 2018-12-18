@@ -10,8 +10,8 @@ scrape_configs:
     scrape_interval: 30s
     static_configs:
       - targets: ['woodpecker:1971']
-      labels:
-        group: ctwoodpecker
+        labels:
+          group: ctwoodpecker
 
 alerting:
   alertmanagers:
