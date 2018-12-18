@@ -242,7 +242,7 @@ func TestFetchSTHSuccess(t *testing.T) {
 				expectedTimestampLine, metricsData)
 		}
 
-		// Check that each log has a minumum expected STH age in the metrics output
+		// Check that each log has a minimum expected STH age in the metrics output
 		expectedMinAge := float64((time.Duration(i+1) * time.Hour).Seconds())
 		// Find the floating point age in the metrics output with a regex
 		expectedMinAgeRegex := regexp.MustCompile(

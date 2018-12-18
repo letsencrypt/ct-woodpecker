@@ -3,16 +3,20 @@ language: go
 sudo: false
 
 go:
-  - "1.10.2"
+  - "1.11.x"
+
+env:
+  - GO111MODULE=on
 
 install:
-  - go get golang.org/x/tools/cmd/cover
-  - go get github.com/mattn/goveralls
-  - go get github.com/kisielk/errcheck
-  - go get ./...
+  # Install `cover` and `goveralls` without `GO111MODULE` enabled so that we
+  # don't download ct-woodpecker dependencies and just put the tools in our
+  # gobin.
+  - GO111MODULE=off go get golang.org/x/tools/cmd/cover
+  - GO111MODULE=off go get github.com/mattn/goveralls
+  - go install -v -mod=vendor ./...
 
 script:
-  - go vet ./...
-  - errcheck -exclude .errcheck_exclude ./...
-  - go test -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
+  - go vet -mod=vendor ./...
+  - go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
   - goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
