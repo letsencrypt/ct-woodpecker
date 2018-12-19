@@ -7,5 +7,8 @@ providers:
     type: file
     disableDeletion: false
     editable: true
+    basicAuth: true
+    basicAuthUser: woodpecker
+    basicAuthPassword: woodpecker
     options:
       path: /etc/grafana/provisioning/dashboards

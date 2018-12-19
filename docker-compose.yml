@@ -2,6 +2,7 @@ version: '3'
 
 volumes:
     grafana_data: {}
+    grafana_post_config_data: {}
     prometheus_data: {}
 
 services:
@@ -82,10 +83,8 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    environment:
-      - "GF_SECURITY_ADMIN_USER=woodpecker"
-      - "GF_SECURITY_ADMIN_PASSWORD=woodpecker"
-      - "GF_LOG_LEVEL=error"
+    env_file:
+      - ./test/config/grafana/provisioning/grafana.env
     ports:
       # Grafana UI
       - 3000:3000
@@ -100,6 +99,22 @@ services:
     depends_on:
       # Grafana pulls metrics from prometheus
       - prometheus
+
+  grafana-post-config:
+    image: fedora
+    env_file:
+      - ./test/config/grafana/provisioning/grafana.env
+    volumes:
+        - ./test/config/grafana/provisioning/init.sh:/tmp/init.sh
+    command:
+      - /tmp/init.sh
+    networks:
+      ctnet:
+        ipv4_address: 10.40.50.7
+        aliases:
+          - grafana-post-config
+    depends_on:
+      - grafana
 
 networks:
   ctnet:
