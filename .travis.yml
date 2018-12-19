@@ -24,6 +24,6 @@ before_script:
 script:
   - go vet -mod=vendor ./...
   - go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
-  - goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
+  - goveralls -coverprofile=coverage.out -service=travis-ci
   - ct-woodpecker -config ./test/config/config.json &
   - sleep 30s; killall ct-woodpecker
