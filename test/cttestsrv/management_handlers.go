@@ -143,3 +143,98 @@ func (is *IntegrationSrv) switchTreesHandler(w http.ResponseWriter, r *http.Requ
 	is.logger.Printf("%s %s request completed.", is.Addr, r.URL.Path)
 	w.WriteHeader(http.StatusOK)
 }
+
+// the alertWebhookHandler dumps any POST bodies sent to it to the logger. This
+// is used in CI for dumping Alertmanager POSTs somewhere they'll appear in
+// stdout without needing to run a separate service just to echo a webhook POST.
+func (is *IntegrationSrv) alertWebhookHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.NotFound(w, r)
+		return
+	}
+
+	msg, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	is.logger.Printf("%s %s request: \n%s\n", is.Addr, r.URL.Path, string(msg))
+	w.WriteHeader(http.StatusOK)
+}
+
+func (is *IntegrationSrv) addMockResponse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.NotFound(w, r)
+		return
+	}
+
+	msg, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var mockResponse struct {
+		Path     string
+		Code     int
+		Response interface{}
+	}
+
+	err = json.Unmarshal(msg, &mockResponse)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if mockResponse.Path == "" {
+		http.Error(
+			w,
+			"Mock response Path must not be empty",
+			http.StatusBadRequest)
+		return
+	}
+
+	is.AddMockResponse(mockResponse.Path, mockResponse.Code, mockResponse.Response)
+	is.logger.Printf(
+		"%s %s request completed - added mock response for %q.",
+		is.Addr, r.URL.Path, mockResponse.Path)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (is *IntegrationSrv) removeMockResponse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.NotFound(w, r)
+		return
+	}
+
+	msg, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var mockResponse struct {
+		Path string
+	}
+
+	err = json.Unmarshal(msg, &mockResponse)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if mockResponse.Path == "" {
+		http.Error(
+			w,
+			"Mock response Path must not be empty",
+			http.StatusBadRequest)
+		return
+	}
+
+	is.RemoveMockResponse(mockResponse.Path)
+	is.logger.Printf(
+		"%s %s request completed - removed mock response for %q.",
+		is.Addr, r.URL.Path, mockResponse.Path)
+	w.WriteHeader(http.StatusOK)
+}

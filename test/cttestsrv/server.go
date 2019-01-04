@@ -38,6 +38,11 @@ type Personality struct {
 	WindowEnd string
 }
 
+type mockResponse struct {
+	Code     int
+	Response interface{}
+}
+
 // IntegrationSrv is an instance of a CT test server.
 type IntegrationSrv struct {
 	sync.RWMutex
@@ -48,6 +53,13 @@ type IntegrationSrv struct {
 
 	// PubKey is the log's public key in base64 encoded format
 	PubKey string
+
+	// mock responses is a map from endpoint to mockResponse. Requests to paths
+	// matching an endpoint added to this map will have the mockResponse.Response
+	// marshalled as JSON in the HTTP response, and the mockResponse.Code used as
+	// the HTTP response code. This can be used to put certain endpoints in
+	// a maintenance mode.
+	mockResponses map[string]*mockResponse
 
 	// latencySchedule holds the latency schedule from the Personality that was
 	// used to create the IntegrationSrv instance. This controls the latency
@@ -120,6 +132,7 @@ func NewServer(p Personality, logger *log.Logger) (*IntegrationSrv, error) {
 		logger:          logger,
 		Addr:            p.Addr,
 		PubKey:          base64.StdEncoding.EncodeToString(pubKeyBytes),
+		mockResponses:   make(map[string]*mockResponse),
 		key:             key,
 		latencySchedule: p.LatencySchedule,
 		server: &http.Server{
@@ -141,6 +154,9 @@ func NewServer(p Personality, logger *log.Logger) (*IntegrationSrv, error) {
 	mux.HandleFunc("/switch-trees", is.switchTreesHandler)
 	mux.HandleFunc("/submissions", is.getSubmissionsHandler)
 	mux.HandleFunc("/sth-fetches", is.getSTHFetchesHandler)
+	mux.HandleFunc("/alert", is.alertWebhookHandler)
+	mux.HandleFunc("/add-mock", is.addMockResponse)
+	mux.HandleFunc("/clear-mock", is.removeMockResponse)
 	is.server.Handler = mux
 	return is, nil
 }
@@ -358,4 +374,29 @@ func (is *IntegrationSrv) Submissions() int64 {
 // far. It is safe to call concurrently.
 func (is *IntegrationSrv) STHFetches() int64 {
 	return atomic.LoadInt64(&is.sthFetches)
+}
+
+func (is *IntegrationSrv) AddMockResponse(
+	path string, code int, response interface{}) {
+	is.Lock()
+	defer is.Unlock()
+
+	is.mockResponses[path] = &mockResponse{
+		Code:     code,
+		Response: response,
+	}
+}
+
+func (is *IntegrationSrv) RemoveMockResponse(path string) {
+	is.Lock()
+	defer is.Unlock()
+
+	is.mockResponses[path] = nil
+}
+
+func (is *IntegrationSrv) GetMockResponse(path string) *mockResponse {
+	is.RLock()
+	defer is.RUnlock()
+
+	return is.mockResponses[path]
 }

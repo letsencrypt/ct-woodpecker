@@ -1,0 +1,14 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'ct-test-srv'
+
+receivers:
+  - name: 'ct-test-srv'
+    webhook_configs:
+      - url: "http://ct-test-srv:4600/alert"
