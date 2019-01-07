@@ -1,6 +1,7 @@
 version: '3'
 
 volumes:
+    grafana_data: {}
     prometheus_data: {}
 
 services:
@@ -78,6 +79,27 @@ services:
     depends_on:
       # webhook alert target
       - ct-test-srv
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - "GF_SECURITY_ADMIN_USER=woodpecker"
+      - "GF_SECURITY_ADMIN_PASSWORD=woodpecker"
+      - "GF_LOG_LEVEL=error"
+    ports:
+      # Grafana UI
+      - 3000:3000
+    volumes:
+        - ./test/config/grafana/provisioning/:/etc/grafana/provisioning/
+        - grafana_data:/var/lib/grafana
+    networks:
+      ctnet:
+        ipv4_address: 10.40.50.6
+        aliases:
+          - grafana
+    depends_on:
+      # Grafana pulls metrics from prometheus
+      - prometheus
 
 networks:
   ctnet:
