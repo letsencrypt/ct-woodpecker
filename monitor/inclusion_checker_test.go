@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"testing"
@@ -338,7 +339,9 @@ func TestCheckInclusion(t *testing.T) {
 			stdout: log.New(os.Stdout, "", log.LstdFlags),
 			stderr: log.New(os.Stdout, "", log.LstdFlags),
 		},
-		&InclusionOptions{},
+		&InclusionOptions{
+			FetchBatchSize: 1000,
+		},
 		mc,
 		logKey,
 		mdb)
@@ -391,12 +394,64 @@ func TestCheckInclusion(t *testing.T) {
 	mc.GetSTHFunc = func(context.Context) (*ct.SignedTreeHead, error) {
 		return &ct.SignedTreeHead{TreeSize: 2}, nil
 	}
-	mc.GetEntriesFunc = func(context.Context, int64, int64) ([]ct.LogEntry, error) {
+	mc.GetEntriesFunc = func(_ context.Context, start, end int64) ([]ct.LogEntry, error) {
 		return nil, errors.New("bad")
 	}
 	err = ic.checkInclusion()
 	if err == nil {
 		t.Fatal("Expected checkInclusion to fail when getEntries failed")
+	}
+
+	// Provide a picky GetEntriesFunc that rejects `end` if it's too big. Test for
+	// an off-by-one error we used to have.
+	treeSize := 2
+	mdb.UpdateIndexFunc = func(int64, int64) error {
+		return nil
+	}
+	mc.GetSTHFunc = func(context.Context) (*ct.SignedTreeHead, error) {
+		return &ct.SignedTreeHead{TreeSize: uint64(treeSize)}, nil
+	}
+	mc.GetEntriesFunc = func(_ context.Context, start, end int64) ([]ct.LogEntry, error) {
+		if end >= int64(treeSize) {
+			return nil, fmt.Errorf("end of range is greater than or equal to tree size. Got end=%d", end)
+		}
+		tree := []ct.LogEntry{
+			{
+				Precert: &ct.Precertificate{
+					IssuerKeyHash:  [32]byte{},
+					TBSCertificate: &ctx509.Certificate{Raw: []byte{1, 2, 3}},
+					Submitted:      ct.ASN1Cert{Data: []byte{1, 2, 3}},
+				},
+				Leaf: ct.MerkleTreeLeaf{TimestampedEntry: &ct.TimestampedEntry{
+					EntryType: ct.PrecertLogEntryType,
+					Timestamp: 1234,
+					PrecertEntry: &ct.PreCert{
+						IssuerKeyHash:  [32]byte{},
+						TBSCertificate: []byte{1, 2, 3},
+					},
+				}},
+			},
+			{
+				Precert: &ct.Precertificate{
+					IssuerKeyHash:  [32]byte{},
+					TBSCertificate: &ctx509.Certificate{Raw: []byte{1, 2, 3}},
+					Submitted:      ct.ASN1Cert{Data: []byte{1, 2, 3}},
+				},
+				Leaf: ct.MerkleTreeLeaf{TimestampedEntry: &ct.TimestampedEntry{
+					EntryType: ct.PrecertLogEntryType,
+					Timestamp: 1234,
+					PrecertEntry: &ct.PreCert{
+						IssuerKeyHash:  [32]byte{},
+						TBSCertificate: []byte{1, 2, 3},
+					},
+				}},
+			},
+		}
+		return tree[start : end+1], nil
+	}
+	err = ic.checkInclusion()
+	if err != nil {
+		t.Fatalf("Expected checkInclusion to call GetEntries with end smaller than tree size. Got %s", err)
 	}
 
 	mc.GetEntriesFunc = func(context.Context, int64, int64) ([]ct.LogEntry, error) {
