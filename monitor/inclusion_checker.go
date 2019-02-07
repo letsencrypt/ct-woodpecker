@@ -168,7 +168,7 @@ func (ic *inclusionChecker) checkInclusion() error {
 				"Unable to get entries for consistency check", newTreeSize, current)
 		return nil
 	}
-	newHead, entries, err := ic.getEntries(current, newTreeSize)
+	newHead, entries, err := ic.getEntries(current, newTreeSize-1)
 	if err != nil {
 		inclusionErrors.WithLabelValues(ic.logURI, "getEntries").Inc()
 		return fmt.Errorf("error retrieving entries from %q: %s", ic.logURI, err)
