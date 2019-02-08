@@ -150,7 +150,7 @@ func New(opts MonitorOptions, stdout, stderr *log.Logger, clk clock.Clock) (*Mon
 		if driver == "" {
 			driver = "sqlite3"
 		}
-		db, err = storage.New(opts.DBDriver, opts.DBURI)
+		db, err = storage.New(driver, opts.DBURI)
 		if err != nil {
 			return nil, err
 		}
