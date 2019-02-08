@@ -14,9 +14,11 @@ RUN go install -v ./cmd/ct-woodpecker/...
 ## main
 FROM alpine:3.8
 
-RUN apk update && apk add --no-cache --virtual ca-certificates
+RUN apk update && apk add ca-certificates bash
 
 COPY --from=builder /go/bin/ct-woodpecker /usr/bin/ct-woodpecker
+COPY --from=builder /ct-woodpecker-src/storage/wait-for-db /usr/bin/wait-for-db
 COPY --from=builder /ct-woodpecker-src/test/ /test/
 
+ENTRYPOINT [ "/usr/bin/wait-for-db" ]
 CMD [ "/usr/bin/ct-woodpecker" ]
