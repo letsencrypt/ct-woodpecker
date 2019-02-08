@@ -17,7 +17,7 @@ func init() {
 }
 
 func setup(t *testing.T) Storage {
-	db, err := New(":memory:")
+	db, err := New("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("Unexpected error initializing datebase: %s", err)
 	}
