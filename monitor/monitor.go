@@ -50,7 +50,8 @@ type MonitorOptions struct {
 	// SCT.
 	MaximumMergeDelay int
 
-	DBURI string
+	DBURI    string
+	DBDriver string
 
 	// FetchOpts holds the FetcherOptions for fetching the log STH periodically.
 	// It may be nil if no STH fetching is to be performed.
@@ -144,8 +145,8 @@ func New(opts MonitorOptions, stdout, stderr *log.Logger, clk clock.Clock) (*Mon
 	}
 
 	var db storage.Storage
-	if opts.DBURI != "" {
-		db, err = storage.New(opts.DBURI)
+	if opts.DBURI != "" && opts.DBDriver != "" {
+		db, err = storage.New(opts.DBDriver, opts.DBURI)
 		if err != nil {
 			return nil, err
 		}

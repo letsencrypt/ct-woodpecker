@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -24,8 +25,8 @@ type impl struct {
 }
 
 // New initializes a impl struct
-func New(uri string) (Storage, error) {
-	db, err := sql.Open("sqlite3", uri)
+func New(driver, uri string) (Storage, error) {
+	db, err := sql.Open(driver, uri)
 	if err != nil {
 		return nil, err
 	}

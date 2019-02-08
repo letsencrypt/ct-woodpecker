@@ -1,6 +1,7 @@
 module github.com/letsencrypt/ct-woodpecker
 
 require (
+	github.com/go-sql-driver/mysql v1.4.1
 	github.com/golang/mock v1.2.0 // indirect
 	github.com/golang/protobuf v1.2.1-0.20181128192352-1d3f30b51784
 	github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c // indirect

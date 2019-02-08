@@ -74,6 +74,8 @@ type Config struct {
 
 	// URI for database storage
 	DBURI string
+	// Driver for database storage
+	DBDriver string
 
 	// Configuration for STH fetching (nil if no fetching is to be done)
 	FetchConfig *STHFetchConfig
@@ -319,6 +321,7 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 			LogKey:            logConf.Key,
 			MaximumMergeDelay: logConf.MaximumMergeDelay,
 			DBURI:             c.DBURI,
+			DBDriver:          c.DBDriver,
 		}
 		if c.FetchConfig != nil {
 			opts.FetchOpts = &monitor.FetcherOptions{
