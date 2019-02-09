@@ -36,7 +36,7 @@ func TestNew(t *testing.T) {
 		t.Errorf("Expected New() with invalid key to error")
 	}
 
-	// Creating a monitor with vaild configuration should not fail
+	// Creating a monitor with valid configuration should not fail
 	m, err := New(
 		MonitorOptions{
 			LogURI:            logURI,
@@ -136,6 +136,45 @@ func TestNew(t *testing.T) {
 
 	if m.submitter.client == nil {
 		t.Errorf("Expected monitor submitter client to be non-nil")
+	}
+
+	// Creating a monitor with a DB URI should succed
+	m, err = New(
+		MonitorOptions{
+			LogURI:            logURI,
+			LogKey:            logKey,
+			DBURI:             ":memory:",
+			MaximumMergeDelay: 9999,
+			FetchOpts: &FetcherOptions{
+				Interval: fetchDuration,
+				Timeout:  time.Second,
+			},
+		}, l, l, clk)
+	if err != nil {
+		t.Fatalf("Expected no error calling New(), got %s", err.Error())
+	}
+	if m == nil {
+		t.Fatalf("Expected a non-nil monitor from New() when err == nil")
+	}
+
+	// Creating a monitor with a DB URI and driver should succed
+	m, err = New(
+		MonitorOptions{
+			LogURI:            logURI,
+			LogKey:            logKey,
+			DBDriver:          "mysql",
+			DBURI:             ":memory:",
+			MaximumMergeDelay: 9999,
+			FetchOpts: &FetcherOptions{
+				Interval: fetchDuration,
+				Timeout:  time.Second,
+			},
+		}, l, l, clk)
+	if err != nil {
+		t.Fatalf("Expected no error calling New(), got %s", err.Error())
+	}
+	if m == nil {
+		t.Fatalf("Expected a non-nil monitor from New() when err == nil")
 	}
 }
 
