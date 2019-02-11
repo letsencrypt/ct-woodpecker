@@ -162,7 +162,6 @@ func TestNew(t *testing.T) {
 		MonitorOptions{
 			LogURI:            logURI,
 			LogKey:            logKey,
-			DBDriver:          "mysql",
 			DBURI:             ":memory:",
 			MaximumMergeDelay: 9999,
 			FetchOpts: &FetcherOptions{

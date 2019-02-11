@@ -1,7 +1,6 @@
 {
   "metricsAddr": ":1971",
-  "dbURI": "file:storage.sqlite",
-  "dbDriver": "sqlite3",
+  "dbURI": "woody:dryocopus_pileatus@tcp(localhost:3306)/woodpeckerdb",
   "fetchConfig": {
     "interval": "20s",
     "timeout": "5s"

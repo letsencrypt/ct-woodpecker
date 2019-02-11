@@ -7,7 +7,6 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // Storage provides methods for interacting with a database
@@ -26,6 +25,9 @@ type impl struct {
 
 // New initializes a impl struct
 func New(driver, uri string) (Storage, error) {
+	if driver == "" {
+		return nil, fmt.Errorf("storage.New: DB driver is required")
+	}
 	db, err := sql.Open(driver, uri)
 	if err != nil {
 		return nil, err

@@ -9,7 +9,6 @@ env:
   - GO111MODULE=on
 
 install:
-  - sudo apt-get install sqlite3
   # Install `cover` and `goveralls` without `GO111MODULE` enabled so that we
   # don't download ct-woodpecker dependencies and just put the tools in our
   # gobin.
@@ -19,11 +18,12 @@ install:
 
 before_script:
   - ct-test-srv -config ./test/config/cttestsrv.json &
-  - cat ./storage/schema.sql | sqlite3 ./storage.sqlite
 
 script:
   - go vet -mod=vendor ./...
-  - go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
+  - docker-compose run --use-aliases -v .:. ct-woodpecker go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
   - goveralls -coverprofile=coverage.out -service=travis-ci
-  - ct-woodpecker -config ./test/config/ct-woodpecker.localdev.json &
-  - sleep 30s; killall ct-woodpecker
+  - docker-compose up -d
+  - sleep 30s
+  - docker-compose stop
+  - docker-compose logs

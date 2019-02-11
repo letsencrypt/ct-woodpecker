@@ -50,8 +50,7 @@ type MonitorOptions struct {
 	// SCT.
 	MaximumMergeDelay int
 
-	DBURI    string
-	DBDriver string
+	DBURI string
 
 	// FetchOpts holds the FetcherOptions for fetching the log STH periodically.
 	// It may be nil if no STH fetching is to be performed.
@@ -146,11 +145,7 @@ func New(opts MonitorOptions, stdout, stderr *log.Logger, clk clock.Clock) (*Mon
 
 	var db storage.Storage
 	if opts.DBURI != "" {
-		driver := opts.DBDriver
-		if driver == "" {
-			driver = "sqlite3"
-		}
-		db, err = storage.New(driver, opts.DBURI)
+		db, err = storage.New("mysql", opts.DBURI)
 		if err != nil {
 			return nil, err
 		}

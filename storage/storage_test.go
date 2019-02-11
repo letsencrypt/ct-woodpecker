@@ -4,6 +4,8 @@ import (
 	"io/ioutil"
 	"testing"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var schema string
