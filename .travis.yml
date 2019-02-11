@@ -16,9 +16,6 @@ install:
   - GO111MODULE=off go get github.com/mattn/goveralls
   - go install -v -mod=vendor ./...
 
-before_script:
-  - ct-test-srv -config ./test/config/cttestsrv.json &
-
 script:
   - go vet -mod=vendor ./...
   - docker-compose run --use-aliases -v .:. ct-woodpecker go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
