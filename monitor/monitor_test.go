@@ -98,7 +98,7 @@ func TestNew(t *testing.T) {
 	}
 
 	// Creating a monitor with a issuer key and cert should not error
-	m, err = New(
+	_, err = New(
 		MonitorOptions{
 			LogURI:            logURI,
 			LogKey:            logKey,
