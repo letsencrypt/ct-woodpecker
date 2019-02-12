@@ -1,5 +1,5 @@
 #!/bin/bash
-set -eux
+set -eu
 DBHOST=mysql
 wait_tcp_port() {
     local host="$1" port="$2"
