@@ -18,10 +18,9 @@ install:
 
 script:
   - set -e
+  - docker-compose up -d mysql
   - go vet -mod=vendor ./...
-  - docker-compose run --use-aliases -v .:. ct-woodpecker go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
+  - go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
   - goveralls -coverprofile=coverage.out -service=travis-ci
-  - docker-compose up -d
-  - sleep 30s
-  - docker-compose stop
-  - docker-compose logs
+  - ct-woodpecker -config ./test/config/ct-woodpecker.localdev.json &
+  - sleep 30s; killall ct-woodpecker
