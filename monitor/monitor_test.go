@@ -98,7 +98,7 @@ func TestNew(t *testing.T) {
 	}
 
 	// Creating a monitor with a issuer key and cert should not error
-	_, err = New(
+	m, err = New(
 		MonitorOptions{
 			LogURI:            logURI,
 			LogKey:            logKey,
@@ -140,7 +140,7 @@ func TestNew(t *testing.T) {
 	}
 
 	// Creating a monitor with a DB URI and no password file should fail.
-	m, err = New(
+	_, err = New(
 		MonitorOptions{
 			LogURI:            logURI,
 			LogKey:            logKey,
