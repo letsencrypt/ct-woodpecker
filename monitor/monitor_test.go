@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"errors"
+	"io/ioutil"
 	"log"
 	"os"
 	"testing"
@@ -138,31 +139,38 @@ func TestNew(t *testing.T) {
 		t.Errorf("Expected monitor submitter client to be non-nil")
 	}
 
-	// Creating a monitor with a DB URI should succed
+	// Creating a monitor with a DB URI and no password file should fail.
 	m, err = New(
 		MonitorOptions{
 			LogURI:            logURI,
 			LogKey:            logKey,
-			DBURI:             ":memory:",
+			DBURI:             "woody@tcp(10.40.50.7:3306)/woodpeckerdb",
 			MaximumMergeDelay: 9999,
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
 				Timeout:  time.Second,
 			},
 		}, l, l, clk)
-	if err != nil {
-		t.Fatalf("Expected no error calling New(), got %s", err.Error())
-	}
-	if m == nil {
-		t.Fatalf("Expected a non-nil monitor from New() when err == nil")
+	if err == nil {
+		t.Fatalf("Expected error calling New(), got no error")
 	}
 
-	// Creating a monitor with a DB URI and driver should succed
+	tmpfile, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatalf("making tempfile: %s", err)
+	}
+	_, err = tmpfile.Write([]byte("sEkRiT"))
+	if err != nil {
+		t.Fatalf("writing password: %s", err)
+	}
+
+	// Creating a monitor with a DB URI and password file should succed
 	m, err = New(
 		MonitorOptions{
 			LogURI:            logURI,
 			LogKey:            logKey,
-			DBURI:             ":memory:",
+			DBURI:             "woody@tcp(10.40.50.7:3306)/woodpeckerdb",
+			DBPasswordFile:    tmpfile.Name(),
 			MaximumMergeDelay: 9999,
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
