@@ -1,6 +1,7 @@
 {
   "metricsAddr": ":1971",
-  "dbURI": "woody:dryocopus_pileatus@tcp(10.40.50.7:3306)/woodpeckerdb",
+  "dbURI": "woody@tcp(10.40.50.7:3306)/woodpeckerdb",
+  "dbPasswordFile": "test/config/db_password",
   "fetchConfig": {
     "interval": "20s",
     "timeout": "5s"
