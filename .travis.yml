@@ -16,6 +16,9 @@ install:
   - GO111MODULE=off go get github.com/mattn/goveralls
   - go install -v -mod=vendor ./...
 
+before_script:
+  - ct-test-srv -config ./test/config/cttestsrv.json &
+
 script:
   - set -e
   - docker-compose up -d mysql
