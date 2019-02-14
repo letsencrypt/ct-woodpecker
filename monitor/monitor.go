@@ -12,6 +12,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -213,6 +214,14 @@ func New(opts MonitorOptions, stdout, stderr *log.Logger, clk clock.Clock) (*Mon
 func makeDB(uri, passwordFile string) (storage.Storage, error) {
 	if passwordFile == "" {
 		return nil, fmt.Errorf("must provide a password file")
+	}
+	fileInfo, err := os.Stat(passwordFile)
+	if err != nil {
+		return nil, err
+	}
+	if fileInfo.Mode()&077 > 0 {
+		return nil, fmt.Errorf("Permissions %o for password file %q are too open.",
+			fileInfo.Mode()&os.ModePerm, passwordFile)
 	}
 	password, err := ioutil.ReadFile(passwordFile)
 	if err != nil {

@@ -19,6 +19,7 @@ RUN apk update && apk add ca-certificates bash
 COPY --from=builder /go/bin/ct-woodpecker /usr/bin/ct-woodpecker
 COPY --from=builder /ct-woodpecker-src/storage/wait-for-db /usr/bin/wait-for-db
 COPY --from=builder /ct-woodpecker-src/test/ /test/
+RUN chmod 0600 /test/config/db_password
 
 ENTRYPOINT [ "/usr/bin/wait-for-db" ]
 CMD [ "/usr/bin/ct-woodpecker" ]
