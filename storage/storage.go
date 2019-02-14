@@ -24,11 +24,8 @@ type impl struct {
 }
 
 // New initializes a impl struct
-func New(driver, uri string) (Storage, error) {
-	if driver == "" {
-		return nil, fmt.Errorf("storage.New: DB driver is required")
-	}
-	db, err := sql.Open(driver, uri)
+func New(uri string) (Storage, error) {
+	db, err := sql.Open("mysql", uri)
 	if err != nil {
 		return nil, err
 	}

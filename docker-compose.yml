@@ -32,7 +32,6 @@ services:
       - 1971:1971
     volumes:
           - .:/ct-woodpecker-src
-          - ./storage.sqlite:/var/ct-woodpecker/storage.sqlite
     networks:
       ctnet:
         ipv4_address: 10.40.50.3

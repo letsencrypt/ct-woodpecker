@@ -1,25 +1,16 @@
 package storage
 
 import (
-	"io/ioutil"
 	"testing"
 	"time"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var schema string
 
-func init() {
-	schemaBytes, err := ioutil.ReadFile("schema.sql")
-	if err != nil {
-		panic(err)
-	}
-	schema = string(schemaBytes)
-}
-
 func setup(t *testing.T) Storage {
-	db, err := New("sqlite3", ":memory:")
+	// NOTE: We expect this DB to already be set up with a schema by
+	// docker-compose.
+	db, err := New("woody:dryocopus_pileatus@tcp(10.40.50.7:3306)/woodpeckerdb")
 	if err != nil {
 		t.Fatalf("Unexpected error initializing datebase: %s", err)
 	}

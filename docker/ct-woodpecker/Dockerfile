@@ -1,7 +1,7 @@
 FROM golang:1.11-alpine as builder
 
 RUN apk --update upgrade \
-&& apk --no-cache --no-progress add git bash curl sqlite-libs sqlite-dev build-base \
+&& apk --no-cache --no-progress add git bash curl build-base \
 && rm -rf /var/cache/apk/*
 
 ENV GOFLAGS=-mod=vendor

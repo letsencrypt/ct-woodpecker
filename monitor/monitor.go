@@ -234,7 +234,7 @@ func makeDB(uri, passwordFile string) (storage.Storage, error) {
 		return nil, err
 	}
 	cfg.Passwd = passwordString
-	db, err := storage.New("mysql", cfg.FormatDSN())
+	db, err := storage.New(cfg.FormatDSN())
 	if err != nil {
 		return nil, err
 	}
