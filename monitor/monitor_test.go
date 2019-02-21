@@ -24,7 +24,6 @@ func TestMakeDBPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = os.Chmod(f.Name(), 0777)
 	if err := os.Chmod(f.Name(), 0777); err != nil {
 		t.Fatal(err)
 	}
