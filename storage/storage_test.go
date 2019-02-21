@@ -10,7 +10,7 @@ func setup(t *testing.T) Storage {
 	// docker-compose.
 	db, err := New("woody:dryocopus_pileatus@tcp(10.40.50.7:3306)/woodpeckerdb")
 	if err != nil {
-		t.Fatalf("initializing datebase: %s", err)
+		t.Fatalf("initializing database: %s", err)
 	}
 	dbObj := db.(*impl)
 	_, err = dbObj.db.Exec("TRUNCATE TABLE SubmittedCerts;")
