@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,24 @@ import (
 const (
 	logKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g=="
 )
+
+func TestMakeDBPermissions(t *testing.T) {
+	f, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Chmod(f.Name(), 0777)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = makeDB("", f.Name())
+	if err == nil {
+		t.Error("expected error for too-permissive passwordFile")
+	}
+	if !strings.Contains(err.Error(), "permissions") {
+		t.Errorf("wrong error %s from makeDB", err)
+	}
+}
 
 func TestNew(t *testing.T) {
 	l := log.New(os.Stdout, "", log.LstdFlags)

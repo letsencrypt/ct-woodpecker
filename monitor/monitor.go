@@ -220,7 +220,7 @@ func makeDB(uri, passwordFile string) (storage.Storage, error) {
 		return nil, err
 	}
 	if fileInfo.Mode()&077 > 0 {
-		return nil, fmt.Errorf("Permissions %o for password file %q are too open.",
+		return nil, fmt.Errorf("permissions %o for password file %q are too open",
 			fileInfo.Mode()&os.ModePerm, passwordFile)
 	}
 	password, err := ioutil.ReadFile(passwordFile)
