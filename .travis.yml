@@ -18,6 +18,7 @@ install:
 
 before_script:
   - ct-test-srv -config ./test/config/cttestsrv.json &
+  - chmod 0600 test/config/db_password
 
 script:
   - set -e
