@@ -1,30 +1,25 @@
 package storage
 
 import (
-	"io/ioutil"
 	"testing"
 	"time"
 )
 
-var schema string
-
-func init() {
-	schemaBytes, err := ioutil.ReadFile("schema.sql")
-	if err != nil {
-		panic(err)
-	}
-	schema = string(schemaBytes)
-}
-
 func setup(t *testing.T) Storage {
-	db, err := New(":memory:")
+	// NOTE: We expect this DB to already be set up with a schema by
+	// docker-compose.
+	db, err := New("woody:dryocopus_pileatus@tcp(10.40.50.7:3306)/woodpeckerdb")
 	if err != nil {
-		t.Fatalf("Unexpected error initializing datebase: %s", err)
+		t.Fatalf("initializing database: %s", err)
 	}
 	dbObj := db.(*impl)
-	_, err = dbObj.db.Exec(schema)
+	_, err = dbObj.db.Exec("TRUNCATE TABLE SubmittedCerts;")
 	if err != nil {
-		t.Fatalf("Unexpected error creating schema: %s", err)
+		t.Fatalf("truncating SubmittedCerts: %s", err)
+	}
+	_, err = dbObj.db.Exec("TRUNCATE TABLE LogIndexes;")
+	if err != nil {
+		t.Fatalf("truncating LogIndexes: %s", err)
 	}
 	return db
 }

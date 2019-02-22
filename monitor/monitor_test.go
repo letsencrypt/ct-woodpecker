@@ -3,8 +3,10 @@ package monitor
 import (
 	"context"
 	"errors"
+	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +18,23 @@ import (
 const (
 	logKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgyN7ptarCAX5krBwDwjhHM+b0xJjCKke+Dfr3GWSbLm3eO7muXRo8FDDdpdiRpnG4NJT0bdzq5YEer4C2eZ+g=="
 )
+
+func TestMakeDBPermissions(t *testing.T) {
+	f, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(f.Name(), 0777); err != nil {
+		t.Fatal(err)
+	}
+	_, err = makeDB("", f.Name())
+	if err == nil {
+		t.Error("expected error for too-permissive passwordFile")
+	}
+	if !strings.Contains(err.Error(), "permissions") {
+		t.Errorf("wrong error %s from makeDB", err)
+	}
+}
 
 func TestNew(t *testing.T) {
 	l := log.New(os.Stdout, "", log.LstdFlags)
@@ -36,7 +55,7 @@ func TestNew(t *testing.T) {
 		t.Errorf("Expected New() with invalid key to error")
 	}
 
-	// Creating a monitor with vaild configuration should not fail
+	// Creating a monitor with valid configuration should not fail
 	m, err := New(
 		MonitorOptions{
 			LogURI:            logURI,
@@ -136,6 +155,51 @@ func TestNew(t *testing.T) {
 
 	if m.submitter.client == nil {
 		t.Errorf("Expected monitor submitter client to be non-nil")
+	}
+
+	// Creating a monitor with a DB URI and no password file should fail.
+	_, err = New(
+		MonitorOptions{
+			LogURI:            logURI,
+			LogKey:            logKey,
+			DBURI:             "woody@tcp(10.40.50.7:3306)/woodpeckerdb",
+			MaximumMergeDelay: 9999,
+			FetchOpts: &FetcherOptions{
+				Interval: fetchDuration,
+				Timeout:  time.Second,
+			},
+		}, l, l, clk)
+	if err == nil {
+		t.Fatalf("Expected error calling New(), got no error")
+	}
+
+	tmpfile, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatalf("making tempfile: %s", err)
+	}
+	_, err = tmpfile.Write([]byte("sEkRiT"))
+	if err != nil {
+		t.Fatalf("writing password: %s", err)
+	}
+
+	// Creating a monitor with a DB URI and password file should succed
+	m, err = New(
+		MonitorOptions{
+			LogURI:            logURI,
+			LogKey:            logKey,
+			DBURI:             "woody@tcp(10.40.50.7:3306)/woodpeckerdb",
+			DBPasswordFile:    tmpfile.Name(),
+			MaximumMergeDelay: 9999,
+			FetchOpts: &FetcherOptions{
+				Interval: fetchDuration,
+				Timeout:  time.Second,
+			},
+		}, l, l, clk)
+	if err != nil {
+		t.Fatalf("Expected no error calling New(), got %s", err.Error())
+	}
+	if m == nil {
+		t.Fatalf("Expected a non-nil monitor from New() when err == nil")
 	}
 }
 

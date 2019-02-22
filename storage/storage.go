@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // Storage provides methods for interacting with a database
@@ -25,7 +25,7 @@ type impl struct {
 
 // New initializes a impl struct
 func New(uri string) (Storage, error) {
-	db, err := sql.Open("sqlite3", uri)
+	db, err := sql.Open("mysql", uri)
 	if err != nil {
 		return nil, err
 	}

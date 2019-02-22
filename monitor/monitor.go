@@ -8,11 +8,15 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/big"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	ct "github.com/google/certificate-transparency-go"
 	ctClient "github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
@@ -50,7 +54,8 @@ type MonitorOptions struct {
 	// SCT.
 	MaximumMergeDelay int
 
-	DBURI string
+	DBURI          string
+	DBPasswordFile string
 
 	// FetchOpts holds the FetcherOptions for fetching the log STH periodically.
 	// It may be nil if no STH fetching is to be performed.
@@ -145,7 +150,7 @@ func New(opts MonitorOptions, stdout, stderr *log.Logger, clk clock.Clock) (*Mon
 
 	var db storage.Storage
 	if opts.DBURI != "" {
-		db, err = storage.New(opts.DBURI)
+		db, err = makeDB(opts.DBURI, opts.DBPasswordFile)
 		if err != nil {
 			return nil, err
 		}
@@ -204,6 +209,36 @@ func New(opts MonitorOptions, stdout, stderr *log.Logger, clk clock.Clock) (*Mon
 	}
 
 	return m, nil
+}
+
+func makeDB(uri, passwordFile string) (storage.Storage, error) {
+	if passwordFile == "" {
+		return nil, fmt.Errorf("must provide a password file")
+	}
+	fileInfo, err := os.Stat(passwordFile)
+	if err != nil {
+		return nil, err
+	}
+	if fileInfo.Mode()&077 > 0 {
+		return nil, fmt.Errorf("permissions %o for password file %q are too open",
+			fileInfo.Mode()&os.ModePerm, passwordFile)
+	}
+	password, err := ioutil.ReadFile(passwordFile)
+	if err != nil {
+		return nil, err
+	}
+	passwordString := strings.TrimRight(string(password), "\n")
+
+	cfg, err := mysql.ParseDSN(uri)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Passwd = passwordString
+	db, err := storage.New(cfg.FormatDSN())
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }
 
 // STHFetcher returns true if the monitor is configured to fetch the monitor

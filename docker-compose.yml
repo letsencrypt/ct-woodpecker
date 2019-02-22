@@ -32,7 +32,6 @@ services:
       - 1971:1971
     volumes:
           - .:/ct-woodpecker-src
-          - ./storage.sqlite:/var/ct-woodpecker/storage.sqlite
     networks:
       ctnet:
         ipv4_address: 10.40.50.3
@@ -40,6 +39,23 @@ services:
           - woodpecker
     depends_on:
       - ct-test-srv
+      - mysql
+
+  mysql:
+      image: mariadb:10.3
+      volumes:
+          # Mount the directory containing the schema; The schema will be run at
+          # initialization time.
+          - ./storage/mysql/:/docker-entrypoint-initdb.d
+      networks:
+        ctnet:
+          ipv4_address: 10.40.50.7
+      environment:
+          MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+          MYSQL_DATABASE: "woodpeckerdb"
+          MYSQL_USER: "woody"
+          MYSQL_PASSWORD: "dryocopus_pileatus"
+      command: mysqld --bind-address=0.0.0.0
 
   prometheus:
     image: prom/prometheus:v2.1.0
