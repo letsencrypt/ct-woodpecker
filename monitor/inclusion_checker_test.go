@@ -55,9 +55,7 @@ func TestGetEntries(t *testing.T) {
 			stdout: log.New(os.Stdout, "", log.LstdFlags),
 			stderr: log.New(os.Stdout, "", log.LstdFlags),
 		},
-		&InclusionOptions{
-			FetchBatchSize: 0,
-		},
+		&InclusionOptions{},
 		mc,
 		logKey,
 		mdb)
@@ -339,9 +337,7 @@ func TestCheckInclusion(t *testing.T) {
 			stdout: log.New(os.Stdout, "", log.LstdFlags),
 			stderr: log.New(os.Stdout, "", log.LstdFlags),
 		},
-		&InclusionOptions{
-			FetchBatchSize: 1000,
-		},
+		&InclusionOptions{},
 		mc,
 		logKey,
 		mdb)

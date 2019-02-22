@@ -13,8 +13,7 @@
   },
   "inclusionConfig": {
     "interval": "630s",
-    "fetchBatchSize": 30,
-    "maxGetEntries": 30
+    "maxGetEntries": 30000
   },
   "logs": [
     {

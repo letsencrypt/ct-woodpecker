@@ -60,9 +60,10 @@ type CertSubmitConfig struct {
 // InclusionCheckerConfig describes the configuration for checking submitted
 // certificates have been included in a monitored log periodically.
 type InclusionCheckerConfig struct {
-	Interval       string
-	FetchBatchSize int64
-	MaxGetEntries  int64
+	// How frequently to check the log for new entries (e.g. 2s, 1m)
+	Interval string
+	// The maximum number of entries to consider each Interval.
+	MaxGetEntries int64
 }
 
 // Config is a struct holding woodpecker configuration. A woodpecker can be
@@ -98,7 +99,7 @@ type LogConfig struct {
 	URI string
 	// Base64 encoded public key for the CT log
 	Key string
-	// Maximum merge delay for the log
+	// Maximum merge delay for the log (in seconds)
 	MaximumMergeDelay int `json:"maximum_merge_delay"`
 	// TreeSize to start at when checking for inclusion
 	Start string
@@ -361,10 +362,9 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 				startIndex, _ = strconv.ParseInt(logConf.Start, 10, 64)
 			}
 			opts.InclusionOpts = &monitor.InclusionOptions{
-				Interval:       inclusionInterval,
-				FetchBatchSize: c.InclusionConfig.FetchBatchSize,
-				MaxGetEntries:  c.InclusionConfig.MaxGetEntries,
-				StartIndex:     startIndex,
+				Interval:      inclusionInterval,
+				MaxGetEntries: c.InclusionConfig.MaxGetEntries,
+				StartIndex:    startIndex,
 			}
 		}
 		m, err := monitor.New(opts, stdout, stderr, clk)

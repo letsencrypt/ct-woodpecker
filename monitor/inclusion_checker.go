@@ -32,11 +32,12 @@ var inclusionErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help: "Number of errors encountered while attempting to check for certificate inclusion",
 }, []string{"uri", "type"})
 
+// See
+// https://godoc.org/github.com/letsencrypt/ct-woodpecker/woodpecker#InclusionCheckerConfig
 type InclusionOptions struct {
-	Interval       time.Duration
-	FetchBatchSize int64
-	MaxGetEntries  int64
-	StartIndex     int64
+	Interval      time.Duration
+	MaxGetEntries int64
+	StartIndex    int64
 }
 
 type inclusionClient interface {
@@ -99,7 +100,6 @@ func newInclusionChecker(
 		signatureChecker: sv,
 		stopChan:         make(chan bool, 1),
 		interval:         opts.Interval,
-		batchSize:        opts.FetchBatchSize,
 		maxGetEntries:    opts.MaxGetEntries,
 		startIndex:       opts.StartIndex,
 	}, nil
@@ -204,7 +204,9 @@ func (ic *inclusionChecker) getEntries(start, end int64) (int64, []ct.LogEntry, 
 	ic.logf("Getting entries from %d to %d", start, end)
 	var allEntries []ct.LogEntry
 	for start < end {
-		batchEnd := min(start+ic.batchSize, end)
+		// We always ask for a thousand entries, and the log will give us whatever
+		// its max is.
+		batchEnd := min(start+1000, end)
 		entries, err := ic.client.GetEntries(context.Background(), start, batchEnd)
 		if err != nil {
 			return 0, nil, err
