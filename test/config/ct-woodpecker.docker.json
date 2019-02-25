@@ -6,15 +6,34 @@
     "interval": "20s",
     "timeout": "5s"
   },
+  "submitConfig": {
+    "interval": "5s",
+    "timeout": "5s",
+    "certIssuerKeyPath": "/test/issuer.key",
+    "certIssuerPath": "/test/issuer.pem"
+  },
+  "inclusionConfig": {
+    "interval": "30s",
+    "maxGetEntries": 30
+  },
   "logs": [
     {
-      "uri": "https://maple.ct.letsencrypt.org/2019",
-      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAg3+vFOesFW51rKECekioAt9Zo50atRoOJ0qLxF7DIEHsHneXLEpgO1WMreleRy1vEbUJD7TXoH9r8qSDGvyew==",
+      "uri": "http://log-one:4600",
+      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYggOxPnPkzKBIhTacSYoIfnSL2jPugcbUKx83vFMvk5gKAz/AGe87w20riuPwEGn229hKVbEKHFB61NIqNHC3Q==",
       "windowStart": "2000-01-01T00:00:00Z",
-      "windowEnd": "2020-01-01T00:00:00Z",
-      "maximum_merge_delay": 86400,
+      "windowEnd": "2001-01-01T00:00:00Z",
+      "maximum_merge_delay": 120,
       "submitPreCert": false,
-      "submitCert": false
+      "submitCert": true
+    },
+    {
+      "uri": "http://log-two:4601",
+      "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEKtnFevaXV/kB8dmhCNZHmxKVLcHX1plaAsY9LrKilhYxdmQZiu36LvAvosTsqMVqRK9a96nC8VaxAdaHUbM8EA==",
+      "windowStart": "2019-01-01T00:00:00Z",
+      "windowEnd": "2099-01-01T00:00:00Z",
+      "maximum_merge_delay": 120,
+      "submitPreCert": false,
+      "submitCert": true
     }
   ]
 }
