@@ -55,9 +55,7 @@ func TestGetEntries(t *testing.T) {
 			stdout: log.New(os.Stdout, "", log.LstdFlags),
 			stderr: log.New(os.Stdout, "", log.LstdFlags),
 		},
-		&InclusionOptions{
-			FetchBatchSize: 0,
-		},
+		&InclusionOptions{},
 		mc,
 		logKey,
 		mdb)
@@ -73,7 +71,10 @@ func TestGetEntries(t *testing.T) {
 	// return three entries, one at a time (because batchSize is 0)
 	mc.GetEntriesFunc = func(_ context.Context, start, end int64) ([]ct.LogEntry, error) {
 		entries := []ct.LogEntry{{}, {}, {}}
-		return entries[start : end+1], nil
+		if int(end) > len(entries) {
+			end = int64(len(entries)) - 1
+		}
+		return entries[start:end], nil
 	}
 	ic.client = mc
 	newHead, entries, err := ic.getEntries(0, 3)
@@ -339,9 +340,7 @@ func TestCheckInclusion(t *testing.T) {
 			stdout: log.New(os.Stdout, "", log.LstdFlags),
 			stderr: log.New(os.Stdout, "", log.LstdFlags),
 		},
-		&InclusionOptions{
-			FetchBatchSize: 1000,
-		},
+		&InclusionOptions{},
 		mc,
 		logKey,
 		mdb)

@@ -12,9 +12,8 @@
     "certIssuerPath": "/etc/ct-woodpecker/issuer.pem"
   },
   "inclusionConfig": {
-    "interval": "630s",
-    "fetchBatchSize": 30,
-    "maxGetEntries": 30
+    "interval": "60s",
+    "maxGetEntries": 3000
   },
   "logs": [
     {
