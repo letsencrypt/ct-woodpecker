@@ -21,6 +21,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const (
+	preCertKind = "precertificate"
+	certKind    = "certificate"
+)
+
 // certSubmitterStats is a type to hold the prometheus metrics used by
 // a certSubmitter
 type certSubmitterStats struct {
@@ -234,10 +239,10 @@ func (c certSubmitter) submit(cert []byte, precert bool) (*ct.SignedCertificateT
 	}
 
 	submissionMethod := c.client.AddChain
-	certKind := "certificate"
+	certKind := certKind
 	if precert {
 		submissionMethod = c.client.AddPreChain
-		certKind = "precertificate"
+		certKind = preCertKind
 	}
 	c.logf("Submitting %s\n", certKind)
 
@@ -267,9 +272,9 @@ func (c certSubmitter) submit(cert []byte, precert bool) (*ct.SignedCertificateT
 // the future or the past (controlled by `requiredSCTFreshness`).
 func (c certSubmitter) submitCertificate(cert *x509.Certificate, precert bool) {
 	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail", "precert": strconv.FormatBool(precert), "duplicate": "false"}
-	certKind := "certificate"
+	certKind := certKind
 	if precert {
-		certKind = "precertificate"
+		certKind = preCertKind
 	}
 	sct, err := c.submit(cert.Raw, precert)
 	if err != nil {
@@ -342,9 +347,9 @@ func (c certSubmitter) submitIncludedDupe() error {
 	}
 
 	failLabels := prometheus.Labels{"uri": c.logURI, "status": "fail", "precert": strconv.FormatBool(originalCert.IsPrecertificate()), "duplicate": "true"}
-	certKind := "certificate"
+	certKind := certKind
 	if originalCert.IsPrecertificate() {
-		certKind = "precertificate"
+		certKind = preCertKind
 	}
 	sct, err := c.submit(cert.Cert, originalCert.IsPrecertificate())
 	if err != nil {
