@@ -24,6 +24,7 @@ before_script:
 
 script:
   - set -e
+  - go mod download
   - golangci-lint run
   - docker-compose up -d mysql
   - go test -mod=vendor -v -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
