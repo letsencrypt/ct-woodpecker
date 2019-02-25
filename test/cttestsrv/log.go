@@ -472,7 +472,7 @@ func (log *testLog) getEntries(start, end int64) ([]*trillian.LogLeaf, error) {
 		return nil, err
 	}
 	if start >= int64(root.TreeSize) {
-		return nil, fmt.Errorf("start index %d is larger than tree size %d\n", start, root.TreeSize)
+		return nil, fmt.Errorf("start index %d is larger than tree size %d", start, root.TreeSize)
 	}
 
 	return tx.GetLeavesByRange(context.Background(), start, end-start)
