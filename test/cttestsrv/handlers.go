@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/google/certificate-transparency-go"
+	ct "github.com/google/certificate-transparency-go"
 )
 
 func (is *IntegrationSrv) tryServeMock(w http.ResponseWriter, r *http.Request) bool {

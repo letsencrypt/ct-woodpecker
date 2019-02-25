@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/certificate-transparency-go"
+	ct "github.com/google/certificate-transparency-go"
 	"github.com/jmhodges/clock"
 
 	"github.com/letsencrypt/ct-woodpecker/pki"

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/google/certificate-transparency-go"
+	ct "github.com/google/certificate-transparency-go"
 )
 
 func GETs(logURI string) {
