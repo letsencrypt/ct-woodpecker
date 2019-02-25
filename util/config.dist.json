@@ -13,7 +13,7 @@
   },
   "inclusionConfig": {
     "interval": "630s",
-    "maxGetEntries": 30000
+    "maxGetEntries": 3000
   },
   "logs": [
     {
