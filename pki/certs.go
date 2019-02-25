@@ -26,10 +26,10 @@ const (
 )
 
 var (
-	nilSubjKeyErr    = errors.New("cannot IssueCertificate with nil subjectKey")
-	nilIssuerKeyErr  = errors.New("cannot IssueCertificate with nil issuerKey")
-	nilIssuerCertErr = errors.New("cannot IssueCertificate with nil issuerCert")
-	nilTemplateErr   = errors.New("cannot IssueCertificate with nil template")
+	errNilSubjKey    = errors.New("cannot IssueCertificate with nil subjectKey")
+	errNilIssuerKey  = errors.New("cannot IssueCertificate with nil issuerKey")
+	errNilIssuerCert = errors.New("cannot IssueCertificate with nil issuerCert")
+	errNilTemplate   = errors.New("cannot IssueCertificate with nil template")
 
 	ctPoisonExtensionID = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 4, 3}
 	ctPoisonExtension   = pkix.Extension{
@@ -67,16 +67,16 @@ func IssueCertificate(
 	issuerKey *ecdsa.PrivateKey,
 	issuerCert, template *x509.Certificate) (*x509.Certificate, error) {
 	if subjectKey == nil {
-		return nil, nilSubjKeyErr
+		return nil, errNilSubjKey
 	}
 	if issuerKey == nil {
-		return nil, nilIssuerKeyErr
+		return nil, errNilIssuerKey
 	}
 	if issuerCert == nil {
-		return nil, nilIssuerCertErr
+		return nil, errNilIssuerCert
 	}
 	if template == nil {
-		return nil, nilTemplateErr
+		return nil, errNilTemplate
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, template, issuerCert, subjectKey, issuerKey)
