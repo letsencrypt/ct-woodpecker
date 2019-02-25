@@ -63,6 +63,9 @@ type InclusionCheckerConfig struct {
 	// How frequently to check the log for new entries (e.g. 2s, 1m)
 	Interval string
 	// The maximum number of entries to consider each Interval.
+	// The rate Interval / MaxGetEntries governs how many entries the inclusion
+	// checker can process per second, and it should be significantly higher than
+	// the expected growth rate of the log.
 	MaxGetEntries int64
 }
 
