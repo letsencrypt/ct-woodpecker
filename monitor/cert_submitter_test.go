@@ -199,6 +199,7 @@ func TestSubmitIncludedDupe(t *testing.T) {
 		{
 			setup: func() {
 				// No included certificates to return
+				//nolint:unparam
 				mdb.GetRandSeenFunc = func(_ int64) (*storage.SubmittedCert, error) {
 					return nil, sql.ErrNoRows
 				}
@@ -220,6 +221,7 @@ func TestSubmitIncludedDupe(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+				//nolint:unparam
 				mdb.GetRandSeenFunc = func(_ int64) (*storage.SubmittedCert, error) {
 					return &storage.SubmittedCert{
 						ID:        1,
@@ -247,6 +249,7 @@ func TestSubmitIncludedDupe(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+				//nolint:unparam
 				mdb.GetRandSeenFunc = func(_ int64) (*storage.SubmittedCert, error) {
 					return &storage.SubmittedCert{
 						ID:        1,
