@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/google/certificate-transparency-go"
+	ct "github.com/google/certificate-transparency-go"
 )
 
 func GETs(logURI string) {
@@ -29,7 +29,7 @@ func GETs(logURI string) {
 		},
 		{
 			Case:           "Only end",
-			Endpoint:       string(string(ct.GetEntriesStr)) + "?end=1",
+			Endpoint:       string(ct.GetEntriesStr) + "?end=1",
 			ExpectedStatus: 400,
 		},
 		{

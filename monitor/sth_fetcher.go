@@ -28,7 +28,7 @@ type sthFetchStats struct {
 
 // sthStats is a sthFetchStats instance with promauto registered
 // prometheus metrics
-var sthStats *sthFetchStats = &sthFetchStats{
+var sthStats = &sthFetchStats{
 	sthTimestamp: promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "sth_timestamp",
 		Help: "Timestamp of observed CT log signed tree head (STH)",

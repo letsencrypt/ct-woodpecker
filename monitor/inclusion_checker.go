@@ -10,11 +10,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/certificate-transparency-go"
-	"github.com/google/certificate-transparency-go/tls"
+	ct "github.com/google/certificate-transparency-go"
+	cttls "github.com/google/certificate-transparency-go/tls"
 	"github.com/letsencrypt/ct-woodpecker/storage"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	prometheus "github.com/prometheus/client_golang/prometheus"
+	promauto "github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 var oldestUnseen = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -244,7 +244,7 @@ func (ic *inclusionChecker) checkEntries(certs []storage.SubmittedCert, entries 
 		h := mapKey(certData, entry.Leaf.TimestampedEntry.Timestamp)
 		if matching, found := lookup[h]; found {
 			var sct ct.SignedCertificateTimestamp
-			_, err := tls.Unmarshal(matching.SCT, &sct)
+			_, err := cttls.Unmarshal(matching.SCT, &sct)
 			if err != nil {
 				return 0, 0, fmt.Errorf("error unmarshalling SCT: %s", err)
 			}

@@ -359,6 +359,7 @@ func TestCheckInclusion(t *testing.T) {
 	mdb.GetIndexFunc = func(int64) (int64, error) {
 		return 0, nil
 	}
+	//nolint:unparam
 	mdb.GetUnseenFunc = func(int64) ([]storage.SubmittedCert, error) {
 		return nil, errors.New("bad")
 	}
@@ -367,6 +368,7 @@ func TestCheckInclusion(t *testing.T) {
 		t.Fatal("Expected checkInclusion to fail when db.GetUnseen failed")
 	}
 
+	//nolint:unparam
 	mdb.GetUnseenFunc = func(int64) ([]storage.SubmittedCert, error) {
 		return []storage.SubmittedCert{}, nil
 	}
@@ -375,6 +377,7 @@ func TestCheckInclusion(t *testing.T) {
 		t.Fatalf("Unexpected error: %s", err)
 	}
 
+	//nolint:unparam
 	mdb.GetUnseenFunc = func(int64) ([]storage.SubmittedCert, error) {
 		return []storage.SubmittedCert{
 			{
