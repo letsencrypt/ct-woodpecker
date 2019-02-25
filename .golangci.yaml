@@ -1,0 +1,35 @@
+linters-settings:
+  gocyclo:
+    min-complexity: 25
+  govet:
+    check-shadowing: false
+  misspell:
+    locale: "US"
+
+linters:
+  enable-all: true
+  disable:
+    - stylecheck
+    - gosec
+    - dupl
+    - maligned
+    - depguard
+    - lll
+    - prealloc
+    - scopelint
+    - gocritic
+    - gochecknoinits
+    - gochecknoglobals
+
+issues:
+  exclude:
+    # The following three true positive excludes relate to
+    # https://github.com/letsencrypt/ct-woodpecker/issues/69
+    # and the `test/cttestsrv/log.go` integration test log server.
+    - "SA1019: signedLogRoot.TreeSize is deprecated: TreeSize moved to LogRoot."
+    - "SA1019: signedLogRoot.TimestampNanos is deprecated: TimestampNanos moved to LogRoot."
+    - "SA1019: signedLogRoot.RootHash is deprecated: RootHash moved to LogRoot."
+    # The following excludes are excluded as false-positives.
+    - "string `test` has \\d+ occurrences, make it a constant" # No...
+    - "cyclomatic complexity \\d+ of func `TestIssueTestCertificate` is high \\(> \\d+\\)" # pki/certs_test.go
+    - "cyclomatic complexity \\d+ of func `TestNew` is high \\(> \\d+\\)" # monitor/monitor_test.go
