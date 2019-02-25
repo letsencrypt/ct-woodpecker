@@ -29,7 +29,7 @@ func GETs(logURI string) {
 		},
 		{
 			Case:           "Only end",
-			Endpoint:       string(string(ct.GetEntriesStr)) + "?end=1",
+			Endpoint:       string(ct.GetEntriesStr) + "?end=1",
 			ExpectedStatus: 400,
 		},
 		{
