@@ -42,7 +42,7 @@ var (
 
 	// certStats is a certSubmitterStats instance with promauto registered
 	// prometheus metrics
-	certStats *certSubmitterStats = &certSubmitterStats{
+	certStats = &certSubmitterStats{
 		certSubmitLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "cert_submit_latency",
 			Help:    "Latency submitting certificate chains to CT logs",
