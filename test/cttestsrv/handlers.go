@@ -36,7 +36,7 @@ func (is *IntegrationSrv) tryServeMock(w http.ResponseWriter, r *http.Request) b
 // The number of sthFetches seen by the server is incremented as a result of
 // processing the request.
 func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_GET {
+	if r.Method != test.HTTPGET {
 		http.NotFound(w, r)
 		return
 	}
@@ -71,7 +71,7 @@ func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) 
 // active testlog tree. The count of submissions seen by the server is
 // incremented as a result of processing the request.
 func (is *IntegrationSrv) addChainHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_POST {
+	if r.Method != test.HTTPPOST {
 		http.NotFound(w, r)
 		return
 	}
@@ -133,7 +133,7 @@ func (is *IntegrationSrv) addChainHandler(w http.ResponseWriter, r *http.Request
 // getEntriesHandler handles CT API requests for the get-entries endpoint. It
 // returns incorporated entries from the currently active testlog tree.
 func (is *IntegrationSrv) getEntriesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_GET {
+	if r.Method != test.HTTPGET {
 		http.NotFound(w, r)
 		return
 	}
@@ -190,7 +190,7 @@ func (is *IntegrationSrv) getEntriesHandler(w http.ResponseWriter, r *http.Reque
 // endpoint. It returns a consistency proof from the currently active testlog's
 // tree.
 func (is *IntegrationSrv) getConsistencyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_GET {
+	if r.Method != test.HTTPGET {
 		http.NotFound(w, r)
 		return
 	}

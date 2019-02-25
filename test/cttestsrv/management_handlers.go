@@ -16,7 +16,7 @@ import (
 // regardless of the testlog's activeTree's state. In order to get the "real"
 // STH again the `clearSTHHandler` must be called.
 func (is *IntegrationSrv) setSTHHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_POST {
+	if r.Method != test.HTTPPOST {
 		http.NotFound(w, r)
 		return
 	}
@@ -60,7 +60,7 @@ func (is *IntegrationSrv) setSTHHandler(w http.ResponseWriter, r *http.Request) 
 // Subsequent getSTH requests to the log will return the "real" STH from the
 // testlog's active tree.
 func (is *IntegrationSrv) clearSTHHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_GET {
+	if r.Method != test.HTTPGET {
 		http.NotFound(w, r)
 		return
 	}
@@ -78,7 +78,7 @@ func (is *IntegrationSrv) clearSTHHandler(w http.ResponseWriter, r *http.Request
 // not provided). The number of sequenced leaves is returned as the HTTP
 // response body.
 func (is *IntegrationSrv) integrateHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_GET {
+	if r.Method != test.HTTPGET {
 		http.NotFound(w, r)
 		return
 	}
@@ -110,7 +110,7 @@ func (is *IntegrationSrv) integrateHandler(w http.ResponseWriter, r *http.Reques
 // getSubmissions handler allows fetching the number of add-chain/add-pre-chain
 // requests processed so far using an HTTP GET request.
 func (is *IntegrationSrv) getSubmissionsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_GET {
+	if r.Method != test.HTTPGET {
 		http.NotFound(w, r)
 		return
 	}
@@ -124,7 +124,7 @@ func (is *IntegrationSrv) getSubmissionsHandler(w http.ResponseWriter, r *http.R
 // getSTHFetchesHandler allows fetching the number of get-sth requests processed
 // by the server so far by sending a HTTP GET request.
 func (is *IntegrationSrv) getSTHFetchesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_GET {
+	if r.Method != test.HTTPGET {
 		http.NotFound(w, r)
 		return
 	}
@@ -134,7 +134,7 @@ func (is *IntegrationSrv) getSTHFetchesHandler(w http.ResponseWriter, r *http.Re
 }
 
 func (is *IntegrationSrv) switchTreesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_GET {
+	if r.Method != test.HTTPGET {
 		http.NotFound(w, r)
 		return
 	}
@@ -149,7 +149,7 @@ func (is *IntegrationSrv) switchTreesHandler(w http.ResponseWriter, r *http.Requ
 // is used in CI for dumping Alertmanager POSTs somewhere they'll appear in
 // stdout without needing to run a separate service just to echo a webhook POST.
 func (is *IntegrationSrv) alertWebhookHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_POST {
+	if r.Method != test.HTTPPOST {
 		http.NotFound(w, r)
 		return
 	}
@@ -165,7 +165,7 @@ func (is *IntegrationSrv) alertWebhookHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (is *IntegrationSrv) addMockResponse(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_POST {
+	if r.Method != test.HTTPPOST {
 		http.NotFound(w, r)
 		return
 	}
@@ -204,7 +204,7 @@ func (is *IntegrationSrv) addMockResponse(w http.ResponseWriter, r *http.Request
 }
 
 func (is *IntegrationSrv) removeMockResponse(w http.ResponseWriter, r *http.Request) {
-	if r.Method != test.HTTP_POST {
+	if r.Method != test.HTTPPOST {
 		http.NotFound(w, r)
 		return
 	}
