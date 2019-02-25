@@ -22,7 +22,7 @@ func TestObserveSTH(t *testing.T) {
 	labels := prometheus.Labels{"uri": logURI}
 
 	m, err := New(
-		MonitorOptions{
+		Options{
 			LogURI:            logURI,
 			LogKey:            logKey,
 			MaximumMergeDelay: 999,

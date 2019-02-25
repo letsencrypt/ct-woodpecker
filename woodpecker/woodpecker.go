@@ -317,7 +317,7 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 
 	var monitors []*monitor.Monitor
 	for _, logConf := range c.Logs {
-		opts := monitor.MonitorOptions{
+		opts := monitor.Options{
 			LogURI:            logConf.URI,
 			LogKey:            logConf.Key,
 			MaximumMergeDelay: logConf.MaximumMergeDelay,

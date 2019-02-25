@@ -64,7 +64,7 @@ func TestSubmitCertificate(t *testing.T) {
 	// Create a monitor configured with an certIssuer and certIssuerKey that is
 	// configured to submit precerts
 	m, err := New(
-		MonitorOptions{
+		Options{
 			LogURI: logURI,
 			LogKey: logKey,
 			SubmitOpts: &SubmitterOptions{
