@@ -394,7 +394,7 @@ func (is *IntegrationSrv) RemoveMockResponse(path string) {
 	is.mockResponses[path] = nil
 }
 
-func (is *IntegrationSrv) GetMockResponse(path string) *mockResponse {
+func (is *IntegrationSrv) getMockResponse(path string) *mockResponse {
 	is.RLock()
 	defer is.RUnlock()
 

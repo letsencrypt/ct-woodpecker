@@ -14,7 +14,7 @@ import (
 )
 
 func (is *IntegrationSrv) tryServeMock(w http.ResponseWriter, r *http.Request) bool {
-	if mock := is.GetMockResponse(r.URL.Path); mock != nil {
+	if mock := is.getMockResponse(r.URL.Path); mock != nil {
 		response, err := json.Marshal(mock.Response)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
