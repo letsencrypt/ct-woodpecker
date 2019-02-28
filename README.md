@@ -310,6 +310,12 @@ All pull requests must be reviewed by one of the maintainers (currently @cpu,
 @jsha, and @roland) before merging. We expect all changes to have robust
 unit tests.
 
+## Photo credit
+
+The `ct-woodpecker` repository logo image was provided by a [Pileated
+Woodpecker][pileated] living in the Laurentides region of Quebec, Canada.
+Photographed by [@cpu](https://github.com/cpu), March 2018.
+
 [ct]: https://www.certificate-transparency.org
 [rfc6962]: https://tools.ietf.org/html/rfc6962
 [rfc6962sec5]: https://tools.ietf.org/html/rfc6962#section-5
@@ -318,3 +324,4 @@ unit tests.
 [alertmanager]: https://prometheus.io/docs/alerting/alertmanager/
 [docker]: https://docs.docker.com/install/
 [docker-compose]: https://docs.docker.com/compose/install/
+[pileated]: https://en.wikipedia.org/wiki/Pileated_woodpecker
