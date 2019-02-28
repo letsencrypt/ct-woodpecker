@@ -90,6 +90,40 @@ This will create and configure:
    source for the `prometheus` container and some example `ct-woodpecker`
    dashboards.
 
+The following URLs can be used to access the web interfaces of the monitoring
+components:
+
+* Prometheus web interface: `http://10.40.50.4:9090`
+* AlertManager web interface: `http://10.40.50.5:9093`
+* Grafana web interface (username `woodpecker`, password `woodpecker`): `http://10.40.50.6:3000`
+
+The provided `ct-test-srv` instances offer a small API that can be used to
+easily test `ct-woodpecker` and the associated monitoring in an end-to-end
+setting.
+
+For example, you can break certificate submission for `log-two` by making it
+return a mock 404 response to add-chain requests:
+
+       curl -X POST \
+            -d '{"path":"/ct/v1/add-chain","code":404,"response":{"error":"oh noes!"}}' \
+            localhost:4601/add-mock
+
+Shortly afterwards (2-4m) you can expect the `CertSubmissionErrors` alert to be
+firing in `http://localhost:9090/alerts` based on the `ct-woodpecker` container
+being unable to submit certificates to `log-two`.
+
+You can cause the alert to recover by removing `log-two`'s add-chain mock
+by running: 
+
+       curl -X POST \
+            -d '{"path":"/ct/v1/add-chain"}' \
+            localhost:4601/clear-mock
+
+The `cttestsrv` server supports setting mock STHs, creating inconsistent tree
+views, and controlling when submitted certificates are integrated into the tree.
+See the [cttestsrv management_handlers.go][cttestsrv-management-handlers] for
+more information.
+
 ### Production setup
 
 We don't recommend you use the Docker Compose environment for anything beyond
@@ -339,3 +373,4 @@ Photographed by [@cpu][cpu] March 2018.
 [cpu]: https://github.com/cpu
 [roland]: https://github.com/roland
 [jsha]: https://github.com/jsha
+[cttestsrv-management-handlers]: https://github.com/letsencrypt/ct-woodpecker/blob/master/test/cttestsrv/management_handlers.go
