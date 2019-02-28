@@ -14,6 +14,17 @@ Transparency][ct] log for operational problems.
 Get started by [running a full example environment in Docker](#quick-start) with
 one command.
 
+* [About](#about)
+  * [Limitations](#limitations)
+* [Installation](#installation)
+  * [Quick-start](#quick-start)
+  * [Production Setup](#production-setup)
+* [Collected Metrics](#collected-metrics)
+* [Example Configuration](#example-configuration)
+* [Utilities](#utilities)
+* [Contributing](#contributing)
+* [Photo Credit](#photo-credit)
+
 ## About
 
 `ct-woodpecker` is designed primarily for helping log operators maintain insight
@@ -114,7 +125,7 @@ type, the labels used to slice the metric, and a description.
 
 | Metric Name      | Metric Type   | Labels              | Description                                  |
 | ---------------- |---------------|---------------------|:---------------------------------------------|
-| `sth_timestamp` | GaugeVec | `uri`, | Timestamp of fetched STH |
+| `sth_timestamp` | GaugeVec | `uri` | Timestamp of fetched STH |
 | `sth_age`       | GaugeVec | `uri`            | Elapsed time since timestamp of fetched STH |
 | `sth_failures`  | CounterVec | `uri` | Count of failures fetching a STH |
 | `sth_latency`   | HistogramVec | `uri` | Latency of fetching a STH |
@@ -124,9 +135,9 @@ type, the labels used to slice the metric, and a description.
 | `cert_submit_results` | CounterVec | `uri`, `status`, `precert`, `duplicate` | Result from submitting a cert or precert |
 | `cert_storage_failures` | CounterVec | `uri`, `type` | Count of instances a cert/SCT couldn't be saved to the local DB to watch for inclusion |
 | `stored_scts` | CounterVec | `uri` | Count of unique cert/SCTs retrieved and stored in the db |
-| `oldest_unincorporated_cert` | GaugeVec | Number of seconds since the oldest cert waiting on incorporation was submitted |
+| `oldest_unincorporated_cert` | GaugeVec | `uri` |Number of seconds since the oldest cert waiting on incorporation was submitted |
 | `unincorporated_certs` | GaugeVec | `uri` | Number of certs/SCTs submitted but not yet incorporated |
-| `inclusion_checker_errors` | `uri`, `type` | Number of errors encountered attemtping to check for cert inclusion |
+| `inclusion_checker_errors` | CounterVec | `uri`, `type` | Number of errors encountered attemtping to check for cert inclusion |
 
 * Possible `sth_inconsistency` `type` values are:
   * `"equal-treesize-inequal-hash"` for when two STH's have the same treesize and different hashes.
@@ -306,15 +317,15 @@ package hiearchy:
 * `test/cttestsrv` - a purpose built in-memory mock CT log for integration
    testing.
 
-All pull requests must be reviewed by one of the maintainers (currently @cpu,
-@jsha, and @roland) before merging. We expect all changes to have robust
-unit tests.
+All pull requests must be reviewed by one of the maintainers (currently [@cpu][cpu],
+[@jsha][jsha], and [@roland][roland]) before merging. We expect all changes to
+have robust unit tests.
 
 ## Photo credit
 
 The `ct-woodpecker` repository logo image was provided by a [Pileated
 Woodpecker][pileated] living in the Laurentides region of Quebec, Canada.
-Photographed by [@cpu](https://github.com/cpu), March 2018.
+Photographed by [@cpu][cpu] March 2018.
 
 [ct]: https://www.certificate-transparency.org
 [rfc6962]: https://tools.ietf.org/html/rfc6962
@@ -325,3 +336,6 @@ Photographed by [@cpu](https://github.com/cpu), March 2018.
 [docker]: https://docs.docker.com/install/
 [docker-compose]: https://docs.docker.com/compose/install/
 [pileated]: https://en.wikipedia.org/wiki/Pileated_woodpecker
+[cpu]: https://github.com/cpu
+[roland]: https://github.com/roland
+[jsha]: https://github.com/jsha
