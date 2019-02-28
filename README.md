@@ -11,20 +11,23 @@
 `ct-woodpecker` pokes holes in logs. It is a tool for monitoring a [Certificate
 Transparency][ct] log for operational problems.
 
+Get started by [running a full example environment in Docker](#quick-start) with
+one command.
+
 ## About
 
 `ct-woodpecker` is designed primarily for helping log operators maintain insight
-into the stability and performance of their logs. It is not a complete stand
-alone monitoring solution and is instead designed to integrate with
+into the stability and performance of their logs. It is not a complete
+stand-alone monitoring solution and is instead designed to integrate with
 [Prometheus][prometheus], [Grafana][grafana], and [AlertManager][alertmanager].
 
 `ct-woodpecker` plays some parts of both the "Monitor" role and the "Submitter"
-role described in [RFC 6962 Section 5][rfc6962sec5]. It is not designed to
-fulfill the full role of an independent monitor or auditor.
+role described in [RFC 6962 Section 5][rfc6962sec5] but is not designed to
+fulfill the complete role of an independent monitor or auditor.
 
 As a Monitor, `ct-woodpecker` fetches the current STH from a log at a regular
 interval and emits Prometheus stats related to the STH age, the fetch latecy,
-any errors that occur getting the STH or validating the signature.
+and any errors that occur getting the STH or validating the signature.
 `ct-woodpecker` will also emit similar stats produced validating consistency
 proofs between the current STH and the previous STH.
 
@@ -87,8 +90,7 @@ deploy needs:
    [Grafana][grafana], and [AlertManager][alertmanager].
 1. A dedicated low privilege `ct-woodpecker` user.
 1. An optional test issuer certificate and private key for certificate
-   submission. _These can be generated with the `test/ct-woodpecker-genissuer`
-   command._
+   submission. (See the [ct-woodpecker-genissuer](#utilities) command for more).
 1. A copy of the `ct-woodpecker` binary installed somewhere in `$PATH` (e.g.
    `/usr/local/bin`).
 1. A configured MariaDB database. This means a database, a database user, and
@@ -103,6 +105,56 @@ file](examples/config.dist.json) are provided to help you get started.
 
 Example Prometheus alerts and Grafana dashboards are also provided in the
 [examples/monitoring_and_alerting](examples/monitoring_and_alerting/) directory.
+
+## Collected Metrics
+
+`ct-woodpecker` exports many [Prometheus][prometheus] metrics on the configured
+`metricsAddr` for monitoring purposes. Below is a table of the metric name, the
+type, the labels used to slice the metric, and a description.
+
+| Metric Name      | Metric Type   | Labels              | Description                                  |
+| ---------------- |---------------|---------------------|:---------------------------------------------|
+| `sth_timestamp` | GaugeVec | `uri`, | Timestamp of fetched STH |
+| `sth_age`       | GaugeVec | `uri`            | Elapsed time since timestamp of fetched STH |
+| `sth_failures`  | CounterVec | `uri` | Count of failures fetching a STH |
+| `sth_latency`   | HistogramVec | `uri` | Latency of fetching a STH |
+| `sth_proof_latency` | HistogramVec | `uri` | Latency of fetching a STH consistency proof |
+| `sth_inconsistencies` | CounterVec | `uri`, `type` | Count of instances two STHs could not be proved consistent |
+| `cert_submit_latency` | HistogramVec | `uri`, `precert` | Latency from submitting a cert or precert |
+| `cert_submit_results` | CounterVec | `uri`, `status`, `precert`, `duplicate` | Result from submitting a cert or precert |
+| `cert_storage_failures` | CounterVec | `uri`, `type` | Count of instances a cert/SCT couldn't be saved to the local DB to watch for inclusion |
+| `stored_scts` | CounterVec | `uri` | Count of unique cert/SCTs retrieved and stored in the db |
+| `oldest_unincorporated_cert` | GaugeVec | Number of seconds since the oldest cert waiting on incorporation was submitted |
+| `unincorporated_certs` | GaugeVec | `uri` | Number of certs/SCTs submitted but not yet incorporated |
+| `inclusion_checker_errors` | `uri`, `type` | Number of errors encountered attemtping to check for cert inclusion |
+
+* Possible `sth_inconsistency` `type` values are:
+  * `"equal-treesize-inequal-hash"` for when two STH's have the same treesize and different hashes.
+  * `"failed-to-get-proof"` for when an error occurs fetching the consistency proof.
+  * `"failed-to-verify-proof"` for when a returned STH consistency proof can't
+  be validated.
+
+* Possible `cert_submit_results` `status` values are:
+  * `"fail"` for failed submissions.
+  * `"ok"` for successful submissions.
+
+* `cert_submit_results` will have a true `precert` label when the submission was a precert.
+
+* `cert_submit_results` will have a true `duplicate` label when the submission was a resubmission of a previously submitted cert/precert.
+
+* Possible `cert_storage_failures` `type` values are:
+  * `"marshalling"` for failures to marshal a returned SCT for storage.
+  * `"storing"` for failures to insert the cert/SCT into the DB.
+
+* Possible `inclusion_checker_errors` `type` values are:
+  * `"getIndex"` for failures to get the current stored tree index from the DB.
+  * `"getUnseen"` for failures to find unseen certs/SCTs in the DB.
+  * `"getSTH"` for failures to fetch an STH to determine entries needing to be
+  fetched.
+  * `"getEntires"` for failures to get entries from the log.
+  * `"checkEntires"` for failures to check unseen certs against the returned new
+  entries.
+  * `"updateIndex"` for failures to write a new tree index to the DB.
 
 ## Example Configuration
 
@@ -152,8 +204,9 @@ Example Prometheus alerts and Grafana dashboards are also provided in the
   server.
 
 * **dbURI** - a [MySQL DSN URL](https://github.com/go-sql-driver/mysql#dsn-data-source-name) specifying
-  the DBusername, address, and database name. _NOTE:_ Password should be
-  provided in a separate file via the "dbPasswordFile" config parameter.
+  the DB username, address, and database name. _NOTE:_ The database user
+  password should be provided in a separate file via the "dbPasswordFile" config
+  parameter.
 
 * **dbPasswordFile** - a filepath for a file containing the DB user password.
   _NOTE_: File must have mode `0600`.
@@ -197,7 +250,7 @@ Example Prometheus alerts and Grafana dashboards are also provided in the
   skip ahead to the `startIndex`.
 
 * **logs** - an array of one or more CT logs to be configured. Each log is
-* composed of a config object with the following fields:
+  composed of a config object with the following fields:
 
   * **uri** - the log's URI.
 
@@ -263,3 +316,5 @@ unit tests.
 [prometheus]: https://prometheus.io/
 [grafana]: https://grafana.com/
 [alertmanager]: https://prometheus.io/docs/alerting/alertmanager/
+[docker]: https://docs.docker.com/install/
+[docker-compose]: https://docs.docker.com/compose/install/
