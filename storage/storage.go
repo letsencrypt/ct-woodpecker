@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"time"
 
+	// import the mysql driver. We do this in storage.go instead of main.go
+	// because the driver is a storage related concern.
 	_ "github.com/go-sql-driver/mysql"
 )
 

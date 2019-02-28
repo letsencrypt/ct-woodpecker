@@ -3,8 +3,9 @@ package monitor
 import (
 	"errors"
 	"fmt"
-	ctClient "github.com/google/certificate-transparency-go/client"
 	"testing"
+
+	ctClient "github.com/google/certificate-transparency-go/client"
 )
 
 func TestWrapRspErr(t *testing.T) {

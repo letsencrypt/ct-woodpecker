@@ -10,11 +10,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/certificate-transparency-go"
-	"github.com/google/certificate-transparency-go/tls"
+	ct "github.com/google/certificate-transparency-go"
+	cttls "github.com/google/certificate-transparency-go/tls"
 	"github.com/letsencrypt/ct-woodpecker/storage"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	prometheus "github.com/prometheus/client_golang/prometheus"
+	promauto "github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 var oldestUnseen = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -32,11 +32,12 @@ var inclusionErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help: "Number of errors encountered while attempting to check for certificate inclusion",
 }, []string{"uri", "type"})
 
+// See
+// https://godoc.org/github.com/letsencrypt/ct-woodpecker/woodpecker#InclusionCheckerConfig
 type InclusionOptions struct {
-	Interval       time.Duration
-	FetchBatchSize int64
-	MaxGetEntries  int64
-	StartIndex     int64
+	Interval      time.Duration
+	MaxGetEntries int64
+	StartIndex    int64
 }
 
 type inclusionClient interface {
@@ -99,7 +100,6 @@ func newInclusionChecker(
 		signatureChecker: sv,
 		stopChan:         make(chan bool, 1),
 		interval:         opts.Interval,
-		batchSize:        opts.FetchBatchSize,
 		maxGetEntries:    opts.MaxGetEntries,
 		startIndex:       opts.StartIndex,
 	}, nil
@@ -204,7 +204,9 @@ func (ic *inclusionChecker) getEntries(start, end int64) (int64, []ct.LogEntry, 
 	ic.logf("Getting entries from %d to %d", start, end)
 	var allEntries []ct.LogEntry
 	for start < end {
-		batchEnd := min(start+ic.batchSize, end)
+		// We always ask for a thousand entries, and the log will give us whatever
+		// its max is.
+		batchEnd := min(start+1000, end)
 		entries, err := ic.client.GetEntries(context.Background(), start, batchEnd)
 		if err != nil {
 			return 0, nil, err
@@ -242,7 +244,7 @@ func (ic *inclusionChecker) checkEntries(certs []storage.SubmittedCert, entries 
 		h := mapKey(certData, entry.Leaf.TimestampedEntry.Timestamp)
 		if matching, found := lookup[h]; found {
 			var sct ct.SignedCertificateTimestamp
-			_, err := tls.Unmarshal(matching.SCT, &sct)
+			_, err := cttls.Unmarshal(matching.SCT, &sct)
 			if err != nil {
 				return 0, 0, fmt.Errorf("error unmarshalling SCT: %s", err)
 			}

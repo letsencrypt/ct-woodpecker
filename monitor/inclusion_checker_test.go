@@ -55,9 +55,7 @@ func TestGetEntries(t *testing.T) {
 			stdout: log.New(os.Stdout, "", log.LstdFlags),
 			stderr: log.New(os.Stdout, "", log.LstdFlags),
 		},
-		&InclusionOptions{
-			FetchBatchSize: 0,
-		},
+		&InclusionOptions{},
 		mc,
 		logKey,
 		mdb)
@@ -73,7 +71,10 @@ func TestGetEntries(t *testing.T) {
 	// return three entries, one at a time (because batchSize is 0)
 	mc.GetEntriesFunc = func(_ context.Context, start, end int64) ([]ct.LogEntry, error) {
 		entries := []ct.LogEntry{{}, {}, {}}
-		return entries[start : end+1], nil
+		if int(end) > len(entries) {
+			end = int64(len(entries)) - 1
+		}
+		return entries[start:end], nil
 	}
 	ic.client = mc
 	newHead, entries, err := ic.getEntries(0, 3)
@@ -339,9 +340,7 @@ func TestCheckInclusion(t *testing.T) {
 			stdout: log.New(os.Stdout, "", log.LstdFlags),
 			stderr: log.New(os.Stdout, "", log.LstdFlags),
 		},
-		&InclusionOptions{
-			FetchBatchSize: 1000,
-		},
+		&InclusionOptions{},
 		mc,
 		logKey,
 		mdb)
@@ -360,6 +359,7 @@ func TestCheckInclusion(t *testing.T) {
 	mdb.GetIndexFunc = func(int64) (int64, error) {
 		return 0, nil
 	}
+	//nolint:unparam
 	mdb.GetUnseenFunc = func(int64) ([]storage.SubmittedCert, error) {
 		return nil, errors.New("bad")
 	}
@@ -368,6 +368,7 @@ func TestCheckInclusion(t *testing.T) {
 		t.Fatal("Expected checkInclusion to fail when db.GetUnseen failed")
 	}
 
+	//nolint:unparam
 	mdb.GetUnseenFunc = func(int64) ([]storage.SubmittedCert, error) {
 		return []storage.SubmittedCert{}, nil
 	}
@@ -376,6 +377,7 @@ func TestCheckInclusion(t *testing.T) {
 		t.Fatalf("Unexpected error: %s", err)
 	}
 
+	//nolint:unparam
 	mdb.GetUnseenFunc = func(int64) ([]storage.SubmittedCert, error) {
 		return []storage.SubmittedCert{
 			{

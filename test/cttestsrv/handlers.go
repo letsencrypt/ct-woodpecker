@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/google/certificate-transparency-go"
+	ct "github.com/google/certificate-transparency-go"
 )
 
 func (is *IntegrationSrv) tryServeMock(w http.ResponseWriter, r *http.Request) bool {
-	if mock := is.GetMockResponse(r.URL.Path); mock != nil {
+	if mock := is.getMockResponse(r.URL.Path); mock != nil {
 		response, err := json.Marshal(mock.Response)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -35,7 +35,7 @@ func (is *IntegrationSrv) tryServeMock(w http.ResponseWriter, r *http.Request) b
 // The number of sthFetches seen by the server is incremented as a result of
 // processing the request.
 func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
+	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
 	}
@@ -70,7 +70,7 @@ func (is *IntegrationSrv) getSTHHandler(w http.ResponseWriter, r *http.Request) 
 // active testlog tree. The count of submissions seen by the server is
 // incremented as a result of processing the request.
 func (is *IntegrationSrv) addChainHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
+	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
 	}
@@ -132,7 +132,7 @@ func (is *IntegrationSrv) addChainHandler(w http.ResponseWriter, r *http.Request
 // getEntriesHandler handles CT API requests for the get-entries endpoint. It
 // returns incorporated entries from the currently active testlog tree.
 func (is *IntegrationSrv) getEntriesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
+	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
 	}
@@ -189,7 +189,7 @@ func (is *IntegrationSrv) getEntriesHandler(w http.ResponseWriter, r *http.Reque
 // endpoint. It returns a consistency proof from the currently active testlog's
 // tree.
 func (is *IntegrationSrv) getConsistencyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
+	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
 	}

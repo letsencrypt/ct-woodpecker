@@ -13,11 +13,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/certificate-transparency-go"
+	ct "github.com/google/certificate-transparency-go"
 	cttls "github.com/google/certificate-transparency-go/tls"
 )
 
-// Personality describes the configuration & behaviour of a test CT
+// Personality describes the configuration & behavior of a test CT
 // IntegrationSrv
 type Personality struct {
 	// Port (and optionally IP) to listen on
@@ -56,7 +56,7 @@ type IntegrationSrv struct {
 
 	// mock responses is a map from endpoint to mockResponse. Requests to paths
 	// matching an endpoint added to this map will have the mockResponse.Response
-	// marshalled as JSON in the HTTP response, and the mockResponse.Code used as
+	// marshaled as JSON in the HTTP response, and the mockResponse.Code used as
 	// the HTTP response code. This can be used to put certain endpoints in
 	// a maintenance mode.
 	mockResponses map[string]*mockResponse
@@ -394,7 +394,7 @@ func (is *IntegrationSrv) RemoveMockResponse(path string) {
 	is.mockResponses[path] = nil
 }
 
-func (is *IntegrationSrv) GetMockResponse(path string) *mockResponse {
+func (is *IntegrationSrv) getMockResponse(path string) *mockResponse {
 	is.RLock()
 	defer is.RUnlock()
 

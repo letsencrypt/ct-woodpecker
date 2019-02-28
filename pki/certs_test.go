@@ -25,32 +25,32 @@ func TestIssueCertificate(t *testing.T) {
 	}{
 		{
 			Name:        "nil subjectkey",
-			ExpectedErr: nilSubjKeyErr,
+			ExpectedErr: errNilSubjKey,
 		},
 		{
 			Name:        "nil issuerkey",
 			SubjectKey:  testKey,
-			ExpectedErr: nilIssuerKeyErr,
+			ExpectedErr: errNilIssuerKey,
 		},
 		{
 			Name:        "nil issuercert",
 			SubjectKey:  testKey,
 			IssuerKey:   testKey,
-			ExpectedErr: nilIssuerCertErr,
+			ExpectedErr: errNilIssuerCert,
 		},
 		{
 			Name:        "nil template",
 			SubjectKey:  testKey,
 			IssuerKey:   testKey,
 			IssuerCert:  testCert,
-			ExpectedErr: nilTemplateErr,
+			ExpectedErr: errNilTemplate,
 		},
 		{
 			Name:        "nil template",
 			SubjectKey:  testKey,
 			IssuerKey:   testKey,
 			IssuerCert:  testCert,
-			ExpectedErr: nilTemplateErr,
+			ExpectedErr: errNilTemplate,
 		},
 	}
 

@@ -43,8 +43,8 @@ type monitorCTClient interface {
 	GetSTHConsistency(context.Context, uint64, uint64) ([][]byte, error)
 }
 
-// MonitorOptions is a struct for holding monitor configuration options
-type MonitorOptions struct {
+// Options is a struct for holding monitor configuration options
+type Options struct {
 	// LogURI is the URI of the log to be monitored
 	LogURI string
 	// LogKey is the BASE64 encoded DER of the log's public key (No PEM header/footer).
@@ -70,10 +70,10 @@ type MonitorOptions struct {
 	InclusionOpts *InclusionOptions
 }
 
-// Valid enforces that a MonitorOptions instance is valid. There must be
+// Valid enforces that an Options instance is valid. There must be
 // a non-empty LogURI and LogKey. One of FetchOpts or SubmitOpts must not be
 // non-nil and valid.
-func (conf MonitorOptions) Valid() error {
+func (conf Options) Valid() error {
 	if conf.LogURI == "" {
 		return errors.New("LogURI must not be empty")
 	}
@@ -118,9 +118,9 @@ type Monitor struct {
 	inclusionChecker *inclusionChecker
 }
 
-// New creates a Monitor for the given options. The monitor will not be started
+// New creates a Monitor for the given Options. The monitor will not be started
 // until Run() is called.
-func New(opts MonitorOptions, stdout, stderr *log.Logger, clk clock.Clock) (*Monitor, error) {
+func New(opts Options, stdout, stderr *log.Logger, clk clock.Clock) (*Monitor, error) {
 	if err := opts.Valid(); err != nil {
 		return nil, err
 	}

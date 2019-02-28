@@ -85,9 +85,8 @@ func TestConfigValid(t *testing.T) {
 			CertIssuerPath:    "foo",
 		},
 		InclusionConfig: &InclusionCheckerConfig{
-			Interval:       "120s",
-			FetchBatchSize: 64,
-			MaxGetEntries:  128,
+			Interval:      "120s",
+			MaxGetEntries: 128,
 		},
 		Logs: validLogs,
 	}
@@ -195,9 +194,8 @@ func TestConfigValid(t *testing.T) {
 			Name: "Log with inclusionCheckerConfig no submitConfig",
 			Config: Config{
 				InclusionConfig: &InclusionCheckerConfig{
-					Interval:       "2s",
-					FetchBatchSize: 128,
-					MaxGetEntries:  256,
+					Interval:      "2s",
+					MaxGetEntries: 256,
 				},
 				Logs: validLogs,
 			},
@@ -212,9 +210,8 @@ func TestConfigValid(t *testing.T) {
 					CertIssuerPath:    "foo",
 				},
 				InclusionConfig: &InclusionCheckerConfig{
-					Interval:       "pretty-quickly-i-guess?",
-					FetchBatchSize: 128,
-					MaxGetEntries:  256,
+					Interval:      "pretty-quickly-i-guess?",
+					MaxGetEntries: 256,
 				},
 				Logs: validLogs,
 			},

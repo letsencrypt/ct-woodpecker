@@ -13,11 +13,11 @@ import (
 
 var (
 	clk    clock.Clock = clock.New()
-	stdout *log.Logger = log.New(
+	stdout             = log.New(
 		os.Stdout,
 		path.Base(os.Args[0])+" ",
 		log.LstdFlags)
-	stderr *log.Logger = log.New(
+	stderr = log.New(
 		os.Stderr,
 		path.Base(os.Args[0])+" ",
 		log.LstdFlags)

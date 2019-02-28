@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/certificate-transparency-go"
+	ct "github.com/google/certificate-transparency-go"
 	"github.com/jmhodges/clock"
 
 	"github.com/letsencrypt/ct-woodpecker/pki"
@@ -64,7 +64,7 @@ func TestSubmitCertificate(t *testing.T) {
 	// Create a monitor configured with an certIssuer and certIssuerKey that is
 	// configured to submit precerts
 	m, err := New(
-		MonitorOptions{
+		Options{
 			LogURI: logURI,
 			LogKey: logKey,
 			SubmitOpts: &SubmitterOptions{
@@ -199,7 +199,8 @@ func TestSubmitIncludedDupe(t *testing.T) {
 		{
 			setup: func() {
 				// No included certificates to return
-				mdb.GetRandSeenFunc = func(logID int64) (*storage.SubmittedCert, error) {
+				//nolint:unparam
+				mdb.GetRandSeenFunc = func(_ int64) (*storage.SubmittedCert, error) {
 					return nil, sql.ErrNoRows
 				}
 			},
@@ -220,7 +221,8 @@ func TestSubmitIncludedDupe(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
-				mdb.GetRandSeenFunc = func(logID int64) (*storage.SubmittedCert, error) {
+				//nolint:unparam
+				mdb.GetRandSeenFunc = func(_ int64) (*storage.SubmittedCert, error) {
 					return &storage.SubmittedCert{
 						ID:        1,
 						Cert:      cert,
@@ -247,7 +249,8 @@ func TestSubmitIncludedDupe(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
-				mdb.GetRandSeenFunc = func(logID int64) (*storage.SubmittedCert, error) {
+				//nolint:unparam
+				mdb.GetRandSeenFunc = func(_ int64) (*storage.SubmittedCert, error) {
 					return &storage.SubmittedCert{
 						ID:        1,
 						Cert:      cert,
