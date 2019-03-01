@@ -293,8 +293,8 @@ type, the labels used to slice the metric, and a description.
 
   * **startIndex** - an optional integer specifying the treesize to start
   checking for inclusion from. This is useful if you start `ct-woodpecker`
-  monitoring against a log that already has a large tree to let `ct-woodpecker`
-  skip ahead to the `startIndex`.
+  monitoring against a log that already has a large tree, since it lets
+  `ct-woodpecker` skip ahead to the `startIndex`.
 
 * **logs** - an array of one or more CT logs to be configured. Each log is
   composed of a config object with the following fields:
