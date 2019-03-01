@@ -316,8 +316,8 @@ type, the labels used to slice the metric, and a description.
 
   * **maximum_merge_delay** - the MMD for the log.
 
-  * **submitPreCert** - if true then poisoned precertificates for this log will
-  be generated and submitted based on the global `inclusionConfig`
+  * **submitPreCert** - if true then precertificates for this log will be
+  generated and submitted based on the global `inclusionConfig`
 
   * **submitCert** - if true then final certificates for this log will be
   generated and submitted based on the global `inclusionConfig`
