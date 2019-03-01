@@ -28,7 +28,7 @@ var unseenCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 }, []string{"uri"})
 
 var inclusionErrors = promauto.NewCounterVec(prometheus.CounterOpts{
-	Name: "inclusion_checker_errors",
+	Name: "inclusion_checker_failures",
 	Help: "Number of errors encountered while attempting to check for certificate inclusion",
 }, []string{"uri", "type"})
 
@@ -130,13 +130,13 @@ func (ic *inclusionChecker) stop() {
 func (ic *inclusionChecker) checkInclusion() error {
 	current, err := ic.db.GetIndex(ic.logID)
 	if err != nil {
-		inclusionErrors.WithLabelValues(ic.logURI, "getIndex").Inc()
+		inclusionFailures.WithLabelValues(ic.logURI, "getIndex").Inc()
 		return fmt.Errorf("error getting current log index for %q: %s", ic.logURI, err)
 	}
 
 	certs, err := ic.db.GetUnseen(ic.logID)
 	if err != nil {
-		inclusionErrors.WithLabelValues(ic.logURI, "getUnseen").Inc()
+		inclusionFailures.WithLabelValues(ic.logURI, "getUnseen").Inc()
 		return fmt.Errorf("error getting unseen certificates from %q: %s", ic.logURI, err)
 	}
 	unseenCount.WithLabelValues(ic.logURI).Set(float64(len(certs)))
@@ -148,7 +148,7 @@ func (ic *inclusionChecker) checkInclusion() error {
 
 	sth, err := ic.client.GetSTH(context.Background())
 	if err != nil {
-		inclusionErrors.WithLabelValues(ic.logURI, "getSTH").Inc()
+		inclusionFailures.WithLabelValues(ic.logURI, "getSTH").Inc()
 		return fmt.Errorf("error getting STH from %q: %s", ic.logURI, err)
 	}
 	if sth.TreeSize == 0 {
@@ -170,20 +170,20 @@ func (ic *inclusionChecker) checkInclusion() error {
 	}
 	newHead, entries, err := ic.getEntries(current, newTreeSize-1)
 	if err != nil {
-		inclusionErrors.WithLabelValues(ic.logURI, "getEntries").Inc()
+		inclusionFailures.WithLabelValues(ic.logURI, "getEntries").Inc()
 		return fmt.Errorf("error retrieving entries from %q: %s", ic.logURI, err)
 	}
 
 	seen, oldestAge, err := ic.checkEntries(certs, entries)
 	if err != nil {
-		inclusionErrors.WithLabelValues(ic.logURI, "checkEntries").Inc()
+		inclusionFailures.WithLabelValues(ic.logURI, "checkEntries").Inc()
 		return fmt.Errorf("error checking retrieved entries for %q: %s", ic.logURI, err)
 	}
 	ic.logf("reduced unseen by %d - oldest unseen cert is %s seconds old.", seen, oldestAge)
 
 	err = ic.db.UpdateIndex(ic.logID, newHead)
 	if err != nil {
-		inclusionErrors.WithLabelValues(ic.logURI, "updateIndex").Inc()
+		inclusionFailures.WithLabelValues(ic.logURI, "updateIndex").Inc()
 		return fmt.Errorf("error updating current index for %q: %s", ic.logURI, err)
 	}
 

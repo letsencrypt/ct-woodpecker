@@ -1,6 +1,20 @@
 groups:
 - name: woodpecker_alerts
   rules:
+  - alert: InclusionCheckerErrors
+    expr: sum by () (rate(inclusion_checker_failures[1m])) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      description:  'Errors checking for certificate inclusion.'
+  - alert: CertStorageErrors
+    expr: sum by () (rate(cert_storage_failures[1m])) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      description:  'Errors storing a certificates or SCTs'
   - alert: STHRetrievalErrors
     expr: sum by (uri) (rate(sth_failures[1m])) > 0
     for: 5m
@@ -8,7 +22,7 @@ groups:
       severity: warning
     annotations:
       description:  'Errors retrieving STH from log {{ $labels.uri }}'
-  - alert: STHInconsistencyErrors
+  - alert: STHInconsistencies
     expr: sum by (uri) (rate(sth_inconsistencies[1m])) > 0
     for: 5m
     labels:

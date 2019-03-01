@@ -627,7 +627,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "inclusion_checker_errors",
+          "expr": "inclusion_checker_failures",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "{{ instance }}",
