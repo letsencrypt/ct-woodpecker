@@ -15,6 +15,8 @@ Transparency][ct] log for operational problems.
 Get started by [running a full example environment in Docker](#quick-start) with
 one command.
 
+---
+
 * [About](#about)
   * [Limitations](#limitations)
 * [Installation](#installation)
