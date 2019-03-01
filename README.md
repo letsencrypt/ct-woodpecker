@@ -114,13 +114,13 @@ firing in `http://localhost:9090/alerts` based on the `ct-woodpecker` container
 being unable to submit certificates to `log-two`.
 
 You can cause the alert to recover by removing `log-two`'s add-chain mock
-by running: 
+by running:
 
        curl -X POST \
             -d '{"path":"/ct/v1/add-chain"}' \
             localhost:4601/clear-mock
 
-The `cttestsrv` server supports setting mock STHs, creating inconsistent tree
+The `ct-test-srv` logs also support setting mock STHs, creating inconsistent tree
 views, and controlling when submitted certificates are integrated into the tree.
 See the [cttestsrv management_handlers.go][cttestsrv-management-handlers] for
 more information.
