@@ -9,8 +9,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/letsencrypt/ct-woodpecker)](https://goreportcard.com/report/github.com/letsencrypt/ct-woodpecker)
 [![GolangCI](https://golangci.com/badges/github.com/letsencrypt/ct-woodpecker.svg)](https://golangci.com/r/github.com/letsencrypt/ct-woodpecker)
 
-`ct-woodpecker` pokes holes in logs. It is a tool for monitoring a [Certificate
-Transparency][ct] log for operational problems.
+`ct-woodpecker` pokes holes in logs and finds bugs. It is a tool for monitoring
+a [Certificate Transparency][ct] log for operational problems.
 
 Get started by [running a full example environment in Docker](#quick-start) with
 one command.
