@@ -198,7 +198,7 @@ type, the labels used to slice the metric, and a description.
   * `"getSTH"` for failures to fetch an STH to determine entries needing to be
   fetched.
   * `"getEntries"` for failures to get entries from the log.
-  * `"checkEntires"` for failures to check unseen certs against the returned new
+  * `"checkEntries"` for failures to check unseen certs against the returned new
   entries.
   * `"updateIndex"` for failures to write a new tree index to the DB.
 
