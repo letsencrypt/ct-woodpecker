@@ -3,7 +3,6 @@ package monitor
 import (
 	"log"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -23,9 +22,8 @@ func TestObserveSTH(t *testing.T) {
 
 	m, err := New(
 		Options{
-			LogURI:            logURI,
-			LogKey:            logKey,
-			MaximumMergeDelay: 999,
+			LogURI: logURI,
+			LogKey: logKey,
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
 				Timeout:  time.Second,
@@ -273,11 +271,10 @@ func TestStaleSTHHandling(t *testing.T) {
 	stdErrLogger := log.New(&stdErr, "TestStaleSTHHandling", log.LstdFlags)
 
 	f := newSTHFetcher(monitorCheck{
-		logURI:            logURI,
-		stdout:            l,
-		stderr:            stdErrLogger,
-		maximumMergeDelay: defaultMaximumMergeDelay,
-		clk:               clk,
+		logURI: logURI,
+		stdout: l,
+		stderr: stdErrLogger,
+		clk:    clk,
 	},
 		&FetcherOptions{
 			Interval: fetchInterval,
@@ -364,8 +361,7 @@ func TestStaleSTHHandling(t *testing.T) {
 	if f.prevSTH.TreeSize != 20 {
 		t.Errorf("Expected prevSTH to have treesize %d, got %d", 20, f.prevSTH.TreeSize)
 	}
-	// There should be a log line about the MMD
-	if stdErrOut := stdErr.String(); !strings.Contains(stdErrOut, "Fetched stale STH older than log MMD") {
-		t.Errorf("Expected stderr to have stale STH MMD line, got %q", stdErrOut)
+	if stdErrOut := stdErr.String(); stdErrOut != "" {
+		t.Errorf("Expected stderr to be empty, was %q\n", stdErrOut)
 	}
 }

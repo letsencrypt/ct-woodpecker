@@ -231,7 +231,6 @@ type, the labels used to slice the metric, and a description.
       "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYggOxPnPkzKBIhTacSYoIfnSL2jPugcbUKx83vFMvk5gKAz/AGe87w20riuPwEGn229hKVbEKHFB61NIqNHC3Q==",
       "windowStart": "2000-01-01T00:00:00Z",
       "windowEnd": "2001-01-01T00:00:00Z",
-      "maximum_merge_delay": 120,
       "submitPreCert": false,
       "submitCert": true
     },
@@ -240,7 +239,6 @@ type, the labels used to slice the metric, and a description.
       "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEKtnFevaXV/kB8dmhCNZHmxKVLcHX1plaAsY9LrKilhYxdmQZiu36LvAvosTsqMVqRK9a96nC8VaxAdaHUbM8EA==",
       "windowStart": "2019-01-01T00:00:00Z",
       "windowEnd": "2099-01-01T00:00:00Z",
-      "maximum_merge_delay": 120,
       "submitPreCert": false,
       "submitCert": true
     }
@@ -315,8 +313,6 @@ type, the labels used to slice the metric, and a description.
   the end date for the shard's accepted validity window. `ct-woodpecker` will
   ensure the certificates it generates for this log have a `notAfter` within the
   `windowStart` and `windowEnd`
-
-  * **maximum_merge_delay** - the MMD for the log.
 
   * **submitPreCert** - if true then precertificates for this log will be
   generated and submitted based on the global `inclusionConfig`
