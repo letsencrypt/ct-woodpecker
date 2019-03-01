@@ -306,13 +306,13 @@ type, the labels used to slice the metric, and a description.
 
   * **windowStart** - (optional) for a sharded log the `windowStart` specifies
   the begin date for the shard's accepted validity window. `ct-woodpecker` will
-  ensure the certificates it generates for this log have a validity period
-  within the `windowStart` and `windowEnd`
+  ensure the certificates it generates for this log have a `notAfter` within the
+  `windowStart` and `windowEnd`
 
   * **windowEnd** - (optional) for a sharded log the `windowEnd` specifies
   the end date for the shard's accepted validity window. `ct-woodpecker` will
-  ensure the certificates it generates for this log have a validity period
-  within the `windowStart` and `windowEnd`
+  ensure the certificates it generates for this log have a `notAfter` within the
+  `windowStart` and `windowEnd`
 
   * **maximum_merge_delay** - the MMD for the log.
 
