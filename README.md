@@ -286,9 +286,10 @@ type, the labels used to slice the metric, and a description.
   * **interval** - a duration string describing the time period between attempts
     to check unseen certificates for inclusion.
 
-  * **maxGetEntries** - the maximum number of cert entries to ask a log for.
-  This should be set quite high as `ct-woodpecker` will reduce the number of
-  certs it asks for based on what the log will actually provide.
+  * **maxGetEntries** - the maximum number of log entries to process each
+  interval. `ct-woodpecker` will make a series of `get-entries` calls for
+  entries to process until it gets `maxGetEntries` entries or reaches the tree
+  head.
 
   * **startIndex** - an optional integer specifying the treesize to start
   checking for inclusion from. This is useful if you start `ct-woodpecker`
