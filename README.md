@@ -184,9 +184,9 @@ type, the labels used to slice the metric, and a description.
   * `"fail"` for failed submissions.
   * `"ok"` for successful submissions.
 
-* `cert_submit_results` will have a true `precert` label when the submission was a precert.
+* `cert_submit_results` will have a `precert="true"` label when the submission was a precert.
 
-* `cert_submit_results` will have a true `duplicate` label when the submission was a resubmission of a previously submitted cert/precert.
+* `cert_submit_results` will have a `duplicate="true"` label when the submission was a resubmission of a previously submitted cert/precert.
 
 * Possible `cert_storage_failures` `type` values are:
   * `"marshalling"` for failures to marshal a returned SCT for storage.
