@@ -52,7 +52,7 @@ operators to easily monitor certificate and pre-certificate submission.
 
 After submitting test certificates `ct-woodpecker` periodically fetches new
 entries from the log and emits stats about the oldest certificate it has
-submitted that hasn't yet been merdged into the log's merkle tree. This provides
+submitted that hasn't yet been merged into the log's merkle tree. This provides
 log operators with a way to track and enforce their own maximum-merge-delay (MMD).
 
 ### Limitations
@@ -346,7 +346,7 @@ package hiearchy:
 
 * `cmd/` - individual binaries (`ct-woodpecker`, `ct-malformed`).
 * `woodpecker/` - top level concerns related to monitoring all of the configured
-   logs. The `woodpecker` packege does most of the heavy lifting for the
+   logs. The `woodpecker` package does most of the heavy lifting for the
    `ct-woodpecker` command.
 * `monitor/` - the core monitoring logic.
 * `storage/` - code related to MySQL and persistent storage.
