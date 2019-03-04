@@ -187,13 +187,8 @@ func (f *sthFetcher) observeSTH() {
 	// we probably got back a cached STH that is out of date. In this case we
 	// don't want to overwrite the prevSTH or perform any STH to STH consistency
 	// proof validation since we've likely seen this STH before and done the work
-	// already. We do want to print an error if the stale STH we got back is older
-	// than the log's MMD
-	if f.prevSTH != nil && f.prevSTH.TreeSize > newSTH.TreeSize {
-		if int(sthAge.Seconds()) > f.maximumMergeDelay {
-			f.logErrorf("Fetched stale STH older than log MMD. Prev TreeSize is %d. New STH has TreeSize %d and Age: %s",
-				f.prevSTH.TreeSize, newSTH.TreeSize, sthAge)
-		}
+	// already.
+	if f.prevSTH != nil && newSTH.TreeSize < f.prevSTH.TreeSize {
 		return
 	} else if f.prevSTH != nil {
 		f.verifySTHConsistency(f.prevSTH, newSTH)

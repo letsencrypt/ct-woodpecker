@@ -58,9 +58,8 @@ func TestNew(t *testing.T) {
 	// Creating a monitor with valid configuration should not fail
 	m, err := New(
 		Options{
-			LogURI:            logURI,
-			LogKey:            logKey,
-			MaximumMergeDelay: 9999,
+			LogURI: logURI,
+			LogKey: logKey,
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
 				Timeout:  time.Second,
@@ -118,9 +117,8 @@ func TestNew(t *testing.T) {
 	// Creating a monitor with a issuer key and cert should not error
 	m, err = New(
 		Options{
-			LogURI:            logURI,
-			LogKey:            logKey,
-			MaximumMergeDelay: 9999,
+			LogURI: logURI,
+			LogKey: logKey,
 			SubmitOpts: &SubmitterOptions{
 				Timeout:       time.Second,
 				Interval:      fetchDuration,
@@ -160,10 +158,9 @@ func TestNew(t *testing.T) {
 	// Creating a monitor with a DB URI and no password file should fail.
 	_, err = New(
 		Options{
-			LogURI:            logURI,
-			LogKey:            logKey,
-			DBURI:             "woody@tcp(10.40.50.7:3306)/woodpeckerdb",
-			MaximumMergeDelay: 9999,
+			LogURI: logURI,
+			LogKey: logKey,
+			DBURI:  "woody@tcp(10.40.50.7:3306)/woodpeckerdb",
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
 				Timeout:  time.Second,
@@ -185,11 +182,10 @@ func TestNew(t *testing.T) {
 	// Creating a monitor with a DB URI and password file should succed
 	m, err = New(
 		Options{
-			LogURI:            logURI,
-			LogKey:            logKey,
-			DBURI:             "woody@tcp(10.40.50.7:3306)/woodpeckerdb",
-			DBPasswordFile:    tmpfile.Name(),
-			MaximumMergeDelay: 9999,
+			LogURI:         logURI,
+			LogKey:         logKey,
+			DBURI:          "woody@tcp(10.40.50.7:3306)/woodpeckerdb",
+			DBPasswordFile: tmpfile.Name(),
 			FetchOpts: &FetcherOptions{
 				Interval: fetchDuration,
 				Timeout:  time.Second,

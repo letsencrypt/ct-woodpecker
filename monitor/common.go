@@ -28,13 +28,12 @@ func wrapRspErr(err error) error {
 }
 
 type monitorCheck struct {
-	logURI            string
-	logID             int64
-	maximumMergeDelay int
-	label             string
-	clk               clock.Clock
-	stdout            *log.Logger
-	stderr            *log.Logger
+	logURI string
+	logID  int64
+	label  string
+	clk    clock.Clock
+	stdout *log.Logger
+	stderr *log.Logger
 }
 
 func (mc monitorCheck) logErrorf(format string, args ...interface{}) {
