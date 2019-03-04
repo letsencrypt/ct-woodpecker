@@ -30,7 +30,7 @@ groups:
     annotations:
       description: 'Errors submitting pre-certificates/certificates to log {{ $labels.uri }}'
   - alert: OldUnincorporatedCert
-    expr: sum by (uri) (oldest_unincorporated_cert{le_log="true"}) > 7200 # 7200s = 2h
+    expr: sum by (uri) (oldest_unincorporated_cert) > 7200 # 7200s = 2h
     for: 5m
     labels:
       severity: critical
