@@ -29,3 +29,10 @@ groups:
       severity: warning
     annotations:
       description: 'Errors submitting pre-certificates/certificates to log {{ $labels.uri }}'
+  - alert: OldUnincorporatedCert
+    expr: sum by (uri) (oldest_unincorporated_cert) > 7200 # 7200s = 2h
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      description: 'There is an old unincorporated certificate in log {{ $labels.uri }}. The Maximum Merge Delay is at risk!'
