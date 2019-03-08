@@ -18,7 +18,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/jmhodges/clock"
@@ -103,7 +102,7 @@ type LogConfig struct {
 	// Base64 encoded public key for the CT log
 	Key string
 	// TreeSize to start at when checking for inclusion
-	Start string
+	Start int64
 	// Should woodpecker submit certificates to this log every CertSubmitInterval?
 	SubmitCert bool
 	// Should woodpecker submit pre-certificates to this log every CertSubmitInterval?
@@ -134,13 +133,9 @@ func (lc *LogConfig) Valid() error {
 	if lc.Key == "" {
 		return errors.New("log Key must not be empty")
 	}
-	// If there is a start treesize set, it must be a valid number > 0
-	if lc.Start != "" {
-		if start, err := strconv.ParseInt(lc.Start, 10, 64); err != nil {
-			return err
-		} else if start <= 0 {
-			return errors.New("log start must be > 0 if set")
-		}
+	// If there is a start treesize set, it must be >= 0
+	if lc.Start < 0 {
+		return errors.New("log start must be > 0 if set")
 	}
 	// If there is a WindowStart it must be a valid timestamp
 	if lc.WindowStart != "" {
@@ -351,17 +346,10 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 			}
 		}
 		if c.InclusionConfig != nil {
-			var startIndex int64
-			if logConf.Start != "" {
-				// NOTE(@cpu): We can throw away the error here because the
-				// logConf.Valid() checked the start value parses as an int if specified
-				// already.
-				startIndex, _ = strconv.ParseInt(logConf.Start, 10, 64)
-			}
 			opts.InclusionOpts = &monitor.InclusionOptions{
 				Interval:      inclusionInterval,
 				MaxGetEntries: c.InclusionConfig.MaxGetEntries,
-				StartIndex:    startIndex,
+				StartIndex:    logConf.Start,
 			}
 		}
 		m, err := monitor.New(opts, stdout, stderr, clk)
