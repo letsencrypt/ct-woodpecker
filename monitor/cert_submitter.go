@@ -310,7 +310,7 @@ func (c certSubmitter) submitCertificate(cert *x509.Certificate, precert bool) {
 	// future and the past. The SCT's signature & log ID have already been verified by
 	// `m.client.AddChain()`
 	if sctAge > requiredSCTFreshness {
-		c.logErrorf("Error submitting : returned SCT timestamp signed %s in the future (expected <= %s)",
+		c.logErrorf("Error submitting %s : returned SCT timestamp signed %s in the future (expected <= %s)",
 			certKind, sctAge, requiredSCTFreshness)
 		c.stats.certSubmitResults.With(failLabels).Inc()
 		return
