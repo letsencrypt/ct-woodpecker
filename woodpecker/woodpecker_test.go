@@ -35,12 +35,8 @@ func TestLogConfigValid(t *testing.T) {
 			Config: LogConfig{URI: "http://test.com"},
 		},
 		{
-			Name:   "Non-numeric start",
-			Config: LogConfig{URI: "https://test.com", Key: "⚷", Start: "at the beginning"},
-		},
-		{
-			Name:   "Start less than one",
-			Config: LogConfig{URI: "https://test.com", Key: "⚷", Start: "0"},
+			Name:   "Start less than zero",
+			Config: LogConfig{URI: "https://test.com", Key: "⚷", Start: -1},
 		},
 		{
 			Name:   "Valid log config",
