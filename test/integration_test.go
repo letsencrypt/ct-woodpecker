@@ -61,7 +61,7 @@ func getWoodpeckerMetrics(host string) string {
 	return string(body)
 }
 
-// wodpeckerRun starts a ct-woodpecker monitor with the given configuration. It
+// woodpeckerRun starts a ct-woodpecker monitor with the given configuration. It
 // is allowed to run for the given duration. When complete the standard out and
 // the raw metrics data from the woodpecker instance are returned. If there are
 // any unexpected problems an error is returned instead.
