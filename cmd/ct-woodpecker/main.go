@@ -27,7 +27,7 @@ func main() {
 	configFile := flag.String(
 		"config",
 		"test/config/ct-woodpecker.localdev.json",
-		"JSON ct-woodpekcer configuration file path")
+		"JSON ct-woodpecker configuration file path")
 	flag.Parse()
 
 	// Load and validate the configuration from the provided JSON
