@@ -38,7 +38,7 @@ func TestObserveSTH(t *testing.T) {
 	// Make an STH observation
 	m.fetcher.observeSTH()
 
-    // STH fetches are counted
+	// STH fetches are counted
 	fetchObservations := test.CountCounterVecWithLabels(m.fetcher.stats.sthFetchTotal, labels)
 	if fetchObservations != 1 {
 		t.Errorf("Expected m.fetcher.stats.sthFetchTotal to have 1 sample, had %d",
@@ -72,8 +72,8 @@ func TestObserveSTH(t *testing.T) {
 	// Make another STH observation
 	m.fetcher.observeSTH()
 
-    // There should be another fetch observation sample
-    fetchObservations = test.CountCounterVecWithLabels(m.fetcher.stats.sthFetchTotal, labels)
+	// There should be another fetch observation sample
+	fetchObservations = test.CountCounterVecWithLabels(m.fetcher.stats.sthFetchTotal, labels)
 	if fetchObservations != 2 {
 		t.Errorf("Expected m.fetcher.stats.sthFetchTotal to have 2 samples, had %d",
 			fetchObservations)
