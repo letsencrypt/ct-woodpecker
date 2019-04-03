@@ -24,6 +24,7 @@ type sthFetchStats struct {
 	sthLatency         *prometheus.HistogramVec
 	sthProofLatency    *prometheus.HistogramVec
 	sthInconsistencies *prometheus.CounterVec
+	sthFetchTotal      *prometheus.CounterVec
 }
 
 // sthStats is a sthFetchStats instance with promauto registered
@@ -55,6 +56,10 @@ var sthStats = &sthFetchStats{
 		Name: "sth_inconsistencies",
 		Help: "Count of times two CT log signed tree heads (STHs) could not be proved consistent",
 	}, []string{"uri", "type"}),
+	sthFetchTotal: promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "sth_fetch_total",
+		Help: "Count total number of get-sth calls made against each observed CT log",
+	}, []string{"uri"}),
 }
 
 // FetcherOptions is a struct holding options for STH fetching.
@@ -163,6 +168,8 @@ func (f *sthFetcher) observeSTH() {
 	ctx, cancel := context.WithTimeout(context.Background(), f.sthTimeout)
 	defer cancel()
 	newSTH, err := f.client.GetSTH(ctx)
+	f.stats.sthFetchTotal.With(labels).Inc()
+
 	elapsed := f.clk.Since(start)
 	f.stats.sthLatency.With(labels).Observe(elapsed.Seconds())
 
