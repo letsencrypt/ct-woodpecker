@@ -44,7 +44,7 @@ var sthStats = &sthFetchStats{
 	}, []string{"uri"}),
 	sthFetchTotal: promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "sth_fetch_total",
-		Help: "Count total number of get-sth calls made against each observed CT log",
+		Help: "Count of total number of get-sth calls made against each monitored CT log",
 	}, []string{"uri"}),
 	sthLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "sth_latency",
