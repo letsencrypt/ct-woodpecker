@@ -21,10 +21,10 @@ type sthFetchStats struct {
 	sthTimestamp       *prometheus.GaugeVec
 	sthAge             *prometheus.GaugeVec
 	sthFailures        *prometheus.CounterVec
+	sthFetchTotal      *prometheus.CounterVec
 	sthLatency         *prometheus.HistogramVec
 	sthProofLatency    *prometheus.HistogramVec
 	sthInconsistencies *prometheus.CounterVec
-	sthFetchTotal      *prometheus.CounterVec
 }
 
 // sthStats is a sthFetchStats instance with promauto registered
