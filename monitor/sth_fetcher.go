@@ -21,6 +21,7 @@ type sthFetchStats struct {
 	sthTimestamp       *prometheus.GaugeVec
 	sthAge             *prometheus.GaugeVec
 	sthFailures        *prometheus.CounterVec
+	sthFetchTotal      *prometheus.CounterVec
 	sthLatency         *prometheus.HistogramVec
 	sthProofLatency    *prometheus.HistogramVec
 	sthInconsistencies *prometheus.CounterVec
@@ -40,6 +41,10 @@ var sthStats = &sthFetchStats{
 	sthFailures: promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "sth_failures",
 		Help: "Count of failures fetching CT log signed tree head (STH)",
+	}, []string{"uri"}),
+	sthFetchTotal: promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "sth_fetch_total",
+		Help: "Count of total number of get-sth calls made against each monitored CT log",
 	}, []string{"uri"}),
 	sthLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "sth_latency",
@@ -163,6 +168,8 @@ func (f *sthFetcher) observeSTH() {
 	ctx, cancel := context.WithTimeout(context.Background(), f.sthTimeout)
 	defer cancel()
 	newSTH, err := f.client.GetSTH(ctx)
+	f.stats.sthFetchTotal.With(labels).Inc()
+
 	elapsed := f.clk.Since(start)
 	f.stats.sthLatency.With(labels).Observe(elapsed.Seconds())
 

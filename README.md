@@ -165,6 +165,7 @@ type, the labels used to slice the metric, and a description.
 | `sth_timestamp` | GaugeVec | `uri` | Timestamp of fetched STH |
 | `sth_age`       | GaugeVec | `uri`            | Elapsed time since timestamp of fetched STH |
 | `sth_failures`  | CounterVec | `uri` | Count of failures fetching a STH |
+| `sth_fetch_total`  | CounterVec | `uri` | Count of total number of get-sth calls made against each monitored CT log |
 | `sth_latency`   | HistogramVec | `uri` | Latency of fetching a STH |
 | `sth_proof_latency` | HistogramVec | `uri` | Latency of fetching a STH consistency proof |
 | `sth_inconsistencies` | CounterVec | `uri`, `type` | Count of instances two STHs could not be proved consistent |
