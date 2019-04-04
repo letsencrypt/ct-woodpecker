@@ -74,7 +74,7 @@ func TestObserveSTH(t *testing.T) {
 
 	// There should be another fetch observation sample
 	fetchObservations = test.CountCounterVecWithLabels(m.fetcher.stats.sthFetchTotal, labels)
-	if fetchObservations := test.CountCounterVecWithLabels(m.fetcher.stats.sthFetchTotal, labels); fetchObservations  != 2 {
+	if fetchObservations := test.CountCounterVecWithLabels(m.fetcher.stats.sthFetchTotal, labels); fetchObservations != 2 {
 		t.Errorf("Expected m.fetcher.stats.sthFetchTotal to have 2 samples, had %d",
 			fetchObservations)
 	}
