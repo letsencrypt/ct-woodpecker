@@ -42,6 +42,10 @@ var sthStats = &sthFetchStats{
 		Name: "sth_failures",
 		Help: "Count of failures fetching CT log signed tree head (STH)",
 	}, []string{"uri"}),
+	sthFetchTotal: promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "sth_fetch_total",
+		Help: "Count total number of get-sth calls made against each observed CT log",
+	}, []string{"uri"}),
 	sthLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "sth_latency",
 		Help:    "Latency observing CT log signed tree head (STH)",
@@ -56,10 +60,6 @@ var sthStats = &sthFetchStats{
 		Name: "sth_inconsistencies",
 		Help: "Count of times two CT log signed tree heads (STHs) could not be proved consistent",
 	}, []string{"uri", "type"}),
-	sthFetchTotal: promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "sth_fetch_total",
-		Help: "Count total number of get-sth calls made against each observed CT log",
-	}, []string{"uri"}),
 }
 
 // FetcherOptions is a struct holding options for STH fetching.
