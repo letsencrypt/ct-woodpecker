@@ -374,7 +374,7 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 //
 // The returned server is not started. The caller must call ListenAndServe
 // itself.
-func initMetrics(addr string, stderr *log.Logger) *http.Server {
+func initMetrics(addr string, stderr promhttp.Logger) *http.Server {
 	mux := http.NewServeMux()
 
 	// Register the available pprof handlers on a mux that can be shared with
