@@ -16,8 +16,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 1,
-  "id": 1,
-  "iteration": 1545182654019,
+  "iteration": 1555436625234,
   "links": [],
   "panels": [
     {
@@ -356,10 +355,10 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "cert_storage_failures",
+          "expr": "cert_storage_failures{uri=~\"${log}\"}",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "{{ instace }}",
+          "legendFormat": "{{ uri }}",
           "refId": "A"
         }
       ],
@@ -455,10 +454,11 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "oldest_unincorporated_cert",
+          "expr": "oldest_unincorporated_cert{uri=~\"${log}\"}",
           "format": "time_series",
+          "hide": false,
           "intervalFactor": 1,
-          "legendFormat": "{{ instance }}",
+          "legendFormat": "{{ uri }}",
           "refId": "A"
         }
       ],
@@ -541,10 +541,10 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "unincorporated_certs",
+          "expr": "unincorporated_certs{uri=~\"${log}\"}",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "{{ instance }}",
+          "legendFormat": "{{ uri  }}",
           "refId": "A"
         }
       ],
@@ -627,10 +627,10 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "inclusion_checker_errors",
+          "expr": "inclusion_checker_errors{uri=~\"${log}\"}",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "{{ instance }}",
+          "legendFormat": "{{ uri }}",
           "refId": "A"
         }
       ],
@@ -1228,7 +1228,7 @@
       "valueName": "avg"
     }
   ],
-  "refresh": "1m",
+  "refresh": "5s",
   "schemaVersion": 16,
   "style": "dark",
   "tags": [
@@ -1239,6 +1239,8 @@
       {
         "allValue": null,
         "current": {
+          "selected": true,
+          "tags": [],
           "text": "http://log-one:4600",
           "value": "http://log-one:4600"
         },
@@ -1263,6 +1265,7 @@
       },
       {
         "current": {
+          "selected": true,
           "text": "Prometheus",
           "value": "Prometheus"
         },
@@ -1279,7 +1282,7 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {
@@ -1310,5 +1313,5 @@
   "timezone": "utc",
   "title": "ct-woodpecker",
   "uid": "xNTcJyoiz",
-  "version": 2
+  "version": 1
 }
