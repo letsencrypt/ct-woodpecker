@@ -17,12 +17,14 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"net/url"
 	"time"
 
 	"github.com/jmhodges/clock"
 	"github.com/letsencrypt/ct-woodpecker/monitor"
 	"github.com/letsencrypt/ct-woodpecker/pki"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -362,20 +364,48 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 	return &Woodpecker{
 		logger:        stdout,
 		monitors:      monitors,
-		metricsServer: initMetrics(c.MetricsAddr),
+		metricsServer: initMetrics(c.MetricsAddr, stderr),
 	}, nil
 }
 
 // initMetrics creates a HTTP server listening on the provided addr with
-// a Prometheus handler registered for the /metrics URL path. The server is
-// started on a dedicated goroutine before returning to the caller.
-func initMetrics(addr string) *http.Server {
-	// Create an HTTP server for Prometheus metrics to be served from.
-	statsServer := &http.Server{
+// a Prometheus handler registered under the /metrics URL path and pprof
+// handlers under the /debug/pprof path.
+//
+// The returned server is not started. The caller must call ListenAndServe
+// itself.
+func initMetrics(addr string, stderr promhttp.Logger) *http.Server {
+	mux := http.NewServeMux()
+
+	// Register the available pprof handlers on a mux that can be shared with
+	// prometheus.
+	mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+	mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+	mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	mux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+	// These handlers are defined in runtime/pprof instead of net/http/pprof, and
+	// have to be accessed through net/http/pprof's Handler func.
+	mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
+	mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+	mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+
+	// Handle prometheus metrics under the /metrics path using the default
+	// gatherer. All of ct-woodpecker's promauto stats will be registered with
+	// this gatherer.
+	mux.Handle("/metrics", promhttp.HandlerFor(
+		prometheus.DefaultGatherer,
+		promhttp.HandlerOpts{
+			// Write errors serving metrics to the stderr Logger instance.
+			ErrorLog: stderr,
+		}))
+
+	// Use the mux for the returned http server.
+	return &http.Server{
 		Addr:    addr,
-		Handler: promhttp.Handler(),
+		Handler: mux,
 	}
-	return statsServer
 }
 
 // Run starts each of the Woodpecker's monitors
