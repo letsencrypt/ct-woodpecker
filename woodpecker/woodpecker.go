@@ -291,12 +291,12 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 		}
 		cert, err := pki.LoadCertificate(c.SubmitConfig.CertIssuerPath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("loading issuer certificate from %s: %s", c.SubmitConfig.CertIssuerPath, err)
 		}
 		issuerCert = cert
 		key, err := pki.LoadPrivateKey(c.SubmitConfig.CertIssuerKeyPath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("loading issuer key from %s: %s", c.SubmitConfig.CertIssuerKeyPath, err)
 		}
 		issuerKey = key
 	}
