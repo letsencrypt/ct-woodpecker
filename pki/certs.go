@@ -103,17 +103,18 @@ type CertificatePair struct {
 // to a log. The certificate's subject common name will be a random subdomain
 // based on the certificate serial under the `testCertDomain` domain.
 //
-// If windowStart is nil the certificate NotBefore will be set to the current
-// time based on the provided clock. If windowStart is not nil then the
-// certificate NotBefore will be set to the windowStart plus one day.
-
-// If windowEnd is nil the certificate NotAfter will be set to 90 days after the
-// current time based on the provided clock. If windowEnd is not nil then the
-// certificate NotAfter will be set to the windowEnd minus one day.
+// If windowEnd is nil, issue a 90 day certificate with validity starting today.
+// If windowEnd is in the future, issue a certificate with validity starting today
+// and ending just before windowEnd.
+//
+// If windowEnd is in the past, issue a 90 day certificate that expires
+// just before windowEnd. This allows monitoring of shards that are expired,
+// but not yet frozen.
 //
 // This function creates certificates that will be submitted to public logs and
 // so while they are not issued by a trusted root  we try to avoid cablint
 // errors to avoid requiring log monitors special-case our submissions.
+// In some cases we may issue certificates valid for longer than 825 days.
 func IssueTestCertificate(
 	issuerKey *ecdsa.PrivateKey,
 	issuerCert *x509.Certificate,
@@ -130,16 +131,21 @@ func IssueTestCertificate(
 		return CertificatePair{}, err
 	}
 
-	earliest := clk.Now()
-	latest := earliest.AddDate(0, 0, 90)
+	// For non sharded logs, submit 90 day certificates with notBefore = now.
+	notBefore := clk.Now()
+	notAfter := clk.Now().AddDate(0, 0, 90)
 
-	if windowStart != nil {
-		earliest = *windowStart
-		earliest.AddDate(0, 0, 1)
-	}
+	// For sharded logs, ensure our notAfter is within the shard
+	// by setting creating a cert that expires 1 second before windowEnd.
+	// This may create certificates that are longer than 825 days, but they
+	// are not meant to be BR compliant.
 	if windowEnd != nil {
-		latest = *windowEnd
-		latest.AddDate(0, 0, -1)
+		notAfter = windowEnd.Add(-1 * time.Second)
+		// In the case we are submitting to an expired shard, we must backdate
+		// the cert so notBefore is prior to notAfter.
+		if notAfter.Before(notBefore) {
+			notBefore = notAfter.AddDate(0, 0, -90)
+		}
 	}
 
 	domain := hex.EncodeToString(serial.Bytes()[:5]) + testCertDomain
@@ -151,8 +157,8 @@ func IssueTestCertificate(
 			},
 			DNSNames:              []string{domain},
 			SerialNumber:          serial,
-			NotBefore:             earliest,
-			NotAfter:              latest.AddDate(0, 0, -1),
+			NotBefore:             notBefore,
+			NotAfter:              notAfter,
 			KeyUsage:              x509.KeyUsageDigitalSignature,
 			ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 			BasicConstraintsValid: true,
