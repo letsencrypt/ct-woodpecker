@@ -373,6 +373,31 @@ func TestSubmitterOptions(t *testing.T) {
 				WindowEnd:   &goodEnd,
 			},
 		},
+		{
+			Name: "Invalid base domain",
+			Opts: SubmitterOptions{
+				Interval:    time.Second * 10,
+				Timeout:     time.Second * 10,
+				IssuerKey:   k,
+				IssuerCert:  cert,
+				WindowStart: &goodStart,
+				WindowEnd:   &goodEnd,
+				BaseDomain:  "aaaa",
+			},
+			ExpectedError: "BaseDomain must start with a '.' character",
+		},
+		{
+			Name: "Good base domain",
+			Opts: SubmitterOptions{
+				Interval:    time.Second * 10,
+				Timeout:     time.Second * 10,
+				IssuerKey:   k,
+				IssuerCert:  cert,
+				WindowStart: &goodStart,
+				WindowEnd:   &goodEnd,
+				BaseDomain:  ".my.base.domain.example.com",
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {

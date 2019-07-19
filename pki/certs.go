@@ -20,9 +20,11 @@ import (
 )
 
 const (
-	// Domain suffix for the subject common name of certificates generated for submission
-	// to logs. The prefix will be generated randomly from the certificate serial number.
-	testCertDomain = ".woodpecker.testing.letsencrypt.org"
+	// defaultTestCertDomain is the Domain suffix for the subject common name of
+	// certificates generated for submission to logs unless customized in
+	// ct-woodpecker config. The prefix will be generated randomly from the
+	// certificate serial number.
+	defaultTestCertDomain = ".woodpecker.testing.letsencrypt.org"
 )
 
 var (
@@ -30,6 +32,7 @@ var (
 	errNilIssuerKey  = errors.New("cannot IssueCertificate with nil issuerKey")
 	errNilIssuerCert = errors.New("cannot IssueCertificate with nil issuerCert")
 	errNilTemplate   = errors.New("cannot IssueCertificate with nil template")
+	errBadBaseDomain = errors.New("baseDomain must start with '.' to be used as a domain prefix")
 
 	ctPoisonExtensionID = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 4, 3}
 	ctPoisonExtension   = pkix.Extension{
@@ -101,7 +104,8 @@ type CertificatePair struct {
 // IssueTestCertificate uses the monitor's certIssuer and certIssuerKey to generate
 // a precertificate and a matching final leaf-certificate that can be submitted
 // to a log. The certificate's subject common name will be a random subdomain
-// based on the certificate serial under the `testCertDomain` domain.
+// based on the certificate serial under the provided baseDomain (or
+// defaultTestCertDomain domain if baseDomain is empty).
 //
 // If windowStart is nil the certificate NotBefore will be set to the current
 // time based on the provided clock. If windowStart is not nil then the
@@ -115,11 +119,18 @@ type CertificatePair struct {
 // so while they are not issued by a trusted root  we try to avoid cablint
 // errors to avoid requiring log monitors special-case our submissions.
 func IssueTestCertificate(
+	baseDomain string,
 	issuerKey *ecdsa.PrivateKey,
 	issuerCert *x509.Certificate,
 	clk clock.Clock,
 	windowStart *time.Time,
 	windowEnd *time.Time) (CertificatePair, error) {
+	if baseDomain == "" {
+		baseDomain = defaultTestCertDomain
+	}
+	if baseDomain[0] != '.' {
+		return CertificatePair{}, errBadBaseDomain
+	}
 
 	certKey, err := RandKey()
 	if err != nil {
@@ -142,7 +153,7 @@ func IssueTestCertificate(
 		latest.AddDate(0, 0, -1)
 	}
 
-	domain := hex.EncodeToString(serial.Bytes()[:5]) + testCertDomain
+	domain := hex.EncodeToString(serial.Bytes()[:5]) + baseDomain
 
 	issueLeafCert := func(precert bool) (*x509.Certificate, error) {
 		tmpl := &x509.Certificate{
@@ -157,8 +168,8 @@ func IssueTestCertificate(
 			ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 			BasicConstraintsValid: true,
 			IsCA:                  false,
-			IssuingCertificateURL: []string{"http://issuer" + testCertDomain},
-			CRLDistributionPoints: []string{"http://crls" + testCertDomain},
+			IssuingCertificateURL: []string{"http://issuer" + baseDomain},
+			CRLDistributionPoints: []string{"http://crls" + baseDomain},
 		}
 		if precert {
 			tmpl.ExtraExtensions = []pkix.Extension{ctPoisonExtension}

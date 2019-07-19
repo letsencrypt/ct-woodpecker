@@ -9,7 +9,8 @@
     "interval": "600s",
     "timeout": "500s",
     "certIssuerKeyPath": "/etc/ct-woodpecker/issuer.key",
-    "certIssuerPath": "/etc/ct-woodpecker/issuer.pem"
+    "certIssuerPath": "/etc/ct-woodpecker/issuer.pem",
+    "baseDomain": ".example.com"
   },
   "inclusionConfig": {
     "interval": "60s",
