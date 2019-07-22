@@ -89,6 +89,12 @@ type SubmitterOptions struct {
 	// be constrained within the provided window.
 	WindowStart *time.Time
 	WindowEnd   *time.Time
+	// BaseDomain is the domain suffix used for the subject common name of
+	// submitted certificates in combination with the first bytes of the
+	// random certificate serial. If empty the default value
+	// `.woodpecker.testing.letsencrypt.org` is used. The BaseDomain must begin
+	// with a '.' character.
+	BaseDomain string
 }
 
 // Valid checks that the SubmitterOptions has a valid positive interval and that
@@ -112,6 +118,10 @@ func (o SubmitterOptions) Valid() error {
 
 	if o.WindowStart != nil && o.WindowEnd != nil && o.WindowEnd.Before(*o.WindowStart) {
 		return errors.New("WindowEnd must be after WindowStart")
+	}
+
+	if o.BaseDomain != "" && o.BaseDomain[0] != '.' {
+		return errors.New("BaseDomain must start with a '.' character")
 	}
 
 	return nil
@@ -146,6 +156,9 @@ type certSubmitter struct {
 	// window.
 	windowStart *time.Time
 	windowEnd   *time.Time
+	// Base domain that used as the suffix for the submitted certificate subject
+	// common name. If empty a default domain suffix is used.
+	baseDomain string
 }
 
 func newCertSubmitter(
@@ -168,6 +181,7 @@ func newCertSubmitter(
 		resubmitIncluded:   opts.ResubmitIncluded,
 		windowStart:        opts.WindowStart,
 		windowEnd:          opts.WindowEnd,
+		baseDomain:         opts.BaseDomain,
 	}
 }
 
@@ -204,7 +218,13 @@ func (c *certSubmitter) submitCertificates() {
 		panic("certSubmitter created with nil certIssuerKey or certIssuer\n")
 	}
 
-	certPair, err := pki.IssueTestCertificate(c.certIssuerKey, c.certIssuer, c.clk, c.windowStart, c.windowEnd)
+	certPair, err := pki.IssueTestCertificate(
+		c.baseDomain,
+		c.certIssuerKey,
+		c.certIssuer,
+		c.clk,
+		c.windowStart,
+		c.windowEnd)
 	if err != nil {
 		// This should not occur and if it does we should abort hard
 		panic(fmt.Sprintf("!!! Error issuing certificate: %s\n", err.Error()))

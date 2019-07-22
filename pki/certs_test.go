@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/hex"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,7 +70,7 @@ func TestIssueTestCertificate(t *testing.T) {
 	issuerCert := &x509.Certificate{}
 	clk := clock.New()
 
-	certPair, err := IssueTestCertificate(issuerKey, issuerCert, clk, nil, nil)
+	certPair, err := IssueTestCertificate("", issuerKey, issuerCert, clk, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error from IssueTestCertificate: %s", err.Error())
 	}
@@ -94,7 +95,7 @@ func TestIssueTestCertificate(t *testing.T) {
 		t.Errorf("SerialNumbers of CertPair did not match")
 	}
 
-	expectedDomain := hex.EncodeToString(certPair.PreCert.SerialNumber.Bytes()[:5]) + testCertDomain
+	expectedDomain := hex.EncodeToString(certPair.PreCert.SerialNumber.Bytes()[:5]) + defaultTestCertDomain
 	if certPair.PreCert.Subject.CommonName != expectedDomain {
 		t.Errorf("PreCert had wrong CommonName. Expected %q, had %q",
 			expectedDomain, certPair.PreCert.Subject.CommonName)
@@ -131,7 +132,7 @@ func TestIssueTestCertificate(t *testing.T) {
 		t.Errorf("Cert had wrong KeyUsage. Expected %#v, found %#v", x509.KeyUsageDigitalSignature, certPair.Cert.KeyUsage)
 	}
 
-	expectedIssuerURL := "http://issuer" + testCertDomain
+	expectedIssuerURL := "http://issuer" + defaultTestCertDomain
 	if len(certPair.PreCert.IssuingCertificateURL) != 1 || certPair.PreCert.IssuingCertificateURL[0] != expectedIssuerURL {
 		t.Errorf("PreCert had wrong IssuingCertificateURL. Expected [%q], found %#v", expectedIssuerURL, certPair.PreCert.IssuingCertificateURL)
 	}
@@ -139,7 +140,7 @@ func TestIssueTestCertificate(t *testing.T) {
 		t.Errorf("Cert had wrong IssuingCertificateURL. Expected [%q], found %#v", expectedIssuerURL, certPair.Cert.IssuingCertificateURL)
 	}
 
-	expectedCRLURL := "http://crls" + testCertDomain
+	expectedCRLURL := "http://crls" + defaultTestCertDomain
 	if len(certPair.PreCert.CRLDistributionPoints) != 1 || certPair.PreCert.CRLDistributionPoints[0] != expectedCRLURL {
 		t.Errorf("PreCert had wrong CRLDistributionPoints. Expected [%q], found %#v", expectedCRLURL, certPair.PreCert.CRLDistributionPoints)
 	}
@@ -170,7 +171,7 @@ func TestIssueTestCertificateWindow(t *testing.T) {
 	clk := clock.New()
 
 	// Issue a cert pair with nil WindowStart and WindowEnd
-	certPair, err := IssueTestCertificate(issuerKey, issuerCert, clk, nil, nil)
+	certPair, err := IssueTestCertificate("", issuerKey, issuerCert, clk, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error from IssueTestCertificate: %s", err.Error())
 	}
@@ -217,7 +218,7 @@ func TestIssueTestCertificateWindow(t *testing.T) {
 	windowEnd, _ := time.Parse(time.RFC3339, "2001-01-01T00:00:00Z")
 
 	// Issue a cert pair with specific WindowStart and WindowEnd
-	certPair, err = IssueTestCertificate(issuerKey, issuerCert, clk, &windowStart, &windowEnd)
+	certPair, err = IssueTestCertificate("", issuerKey, issuerCert, clk, &windowStart, &windowEnd)
 	if err != nil {
 		t.Fatalf("unexpected error from IssueTestCertificate: %s", err.Error())
 	}
@@ -254,5 +255,57 @@ func TestIssueTestCertificateWindow(t *testing.T) {
 	if notAfter != expectedEndDate {
 		t.Errorf("cert notAfter was %q, expected %q",
 			notAfter, expectedEndDate)
+	}
+}
+
+func TestIssueTestCertificateBaseDomain(t *testing.T) {
+	issuerKey, _ := RandKey()
+	issuerCert := &x509.Certificate{}
+	clk := clock.New()
+
+	testCases := []struct {
+		name        string
+		baseName    string
+		expectedErr string
+	}{
+		{
+			name:        "invalid base name",
+			baseName:    "example.com",
+			expectedErr: "baseDomain must start with '.' to be used as a domain prefix",
+		},
+		{
+			name: "default base name",
+		},
+		{
+			name:     "custom base name",
+			baseName: ".custom.example.com",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			certPair, err := IssueTestCertificate(tc.baseName, issuerKey, issuerCert, clk, nil, nil)
+
+			if tc.expectedErr == "" && err != nil {
+				t.Errorf("unexpected error from IssueTestCertificate: %s", err.Error())
+			} else if tc.expectedErr != "" && err == nil {
+				t.Errorf("expected err %q got nil", tc.expectedErr)
+			} else if tc.expectedErr != "" && err != nil {
+				if actual := err.Error(); actual != tc.expectedErr {
+					t.Errorf("expected err %q got %q", tc.expectedErr, actual)
+				}
+			} else {
+				expected := tc.baseName
+				if expected == "" {
+					expected = defaultTestCertDomain
+				}
+				if certPair.Cert == nil {
+					t.Fatalf("unexpected nil Cert in CertPair returned from IssueTestCertificate")
+				}
+				if !strings.HasSuffix(certPair.Cert.Subject.CommonName, expected) {
+					t.Errorf("expected cert to have subj. CN suffix %q, was %q", expected, certPair.Cert.Subject.CommonName)
+				}
+			}
+		})
 	}
 }

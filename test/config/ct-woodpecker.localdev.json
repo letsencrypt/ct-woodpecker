@@ -10,7 +10,8 @@
     "interval": "5s",
     "timeout": "5s",
     "certIssuerKeyPath": "test/issuer.key",
-    "certIssuerPath": "test/issuer.pem"
+    "certIssuerPath": "test/issuer.pem",
+    "baseDomain": ".local.dev"
   },
   "inclusionConfig": {
     "interval": "30s",
