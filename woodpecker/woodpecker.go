@@ -108,7 +108,7 @@ type LogConfig struct {
 	// to specify when you're bringing ct-woodpecker up for the first time against
 	// a big log (or if the ct-woodpecker database has been dropped) to avoid
 	// needing to iterate through all past entries trying to check inclusion for
-	// newly submittedsubmitted  certificates.
+	// newly submitted certificates.
 	MinEntry int64
 	// Should woodpecker submit certificates to this log every CertSubmitInterval?
 	SubmitCert bool
