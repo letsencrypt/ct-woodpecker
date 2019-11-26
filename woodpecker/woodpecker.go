@@ -103,8 +103,13 @@ type LogConfig struct {
 	URI string
 	// Base64 encoded public key for the CT log
 	Key string
-	// TreeSize to start at when checking for inclusion
-	Start int64
+	// MinEntry indicates the entry index that should be used by ct-woodpecker
+	// when it first starts checking a log for inclusion. This is a useful option
+	// to specify when you're bringing ct-woodpecker up for the first time against
+	// a big log (or if the ct-woodpecker database has been dropped) to avoid
+	// needing to iterate through all past entries trying to check inclusion for
+	// newly submitted certificates.
+	MinEntry int64
 	// Should woodpecker submit certificates to this log every CertSubmitInterval?
 	SubmitCert bool
 	// Should woodpecker submit pre-certificates to this log every CertSubmitInterval?
@@ -135,9 +140,9 @@ func (lc *LogConfig) Valid() error {
 	if lc.Key == "" {
 		return errors.New("log Key must not be empty")
 	}
-	// If there is a start treesize set, it must be >= 0
-	if lc.Start < 0 {
-		return errors.New("log start must be > 0 if set")
+	// If there is a min entry index set, it must be >= 0
+	if lc.MinEntry < 0 {
+		return errors.New("log MinEntry must be > 0 if set")
 	}
 	// If there is a WindowStart it must be a valid timestamp
 	if lc.WindowStart != "" {
@@ -351,7 +356,7 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 			opts.InclusionOpts = &monitor.InclusionOptions{
 				Interval:      inclusionInterval,
 				MaxGetEntries: c.InclusionConfig.MaxGetEntries,
-				StartIndex:    logConf.Start,
+				StartIndex:    logConf.MinEntry,
 			}
 		}
 		m, err := monitor.New(opts, stdout, stderr, clk)
