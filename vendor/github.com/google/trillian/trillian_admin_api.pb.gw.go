@@ -9,13 +9,13 @@ It translates gRPC into RESTful JSON APIs.
 package trillian
 
 import (
+	"context"
 	"io"
 	"net/http"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/grpc-ecosystem/grpc-gateway/utilities"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -306,15 +306,15 @@ func RegisterTrillianAdminHandlerClient(ctx context.Context, mux *runtime.ServeM
 }
 
 var (
-	pattern_TrillianAdmin_GetTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1beta1", "trees", "tree_id"}, ""))
+	pattern_TrillianAdmin_GetTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1beta1", "trees", "tree_id"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TrillianAdmin_CreateTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1beta1", "trees"}, ""))
+	pattern_TrillianAdmin_CreateTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1beta1", "trees"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TrillianAdmin_UpdateTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1beta1", "trees", "tree.tree_id"}, ""))
+	pattern_TrillianAdmin_UpdateTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1beta1", "trees", "tree.tree_id"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TrillianAdmin_DeleteTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1beta1", "trees", "tree_id"}, ""))
+	pattern_TrillianAdmin_DeleteTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1beta1", "trees", "tree_id"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TrillianAdmin_UndeleteTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1beta1", "trees", "tree_id"}, "undelete"))
+	pattern_TrillianAdmin_UndeleteTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1beta1", "trees", "tree_id"}, "undelete", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (

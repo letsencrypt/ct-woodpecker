@@ -32,11 +32,13 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/google/certificate-transparency-go/asn1"
 	"github.com/google/certificate-transparency-go/tls"
 	"github.com/google/certificate-transparency-go/trillian/util"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/trillian"
 	"github.com/google/trillian/monitoring"
+	"github.com/google/trillian/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -98,26 +100,30 @@ const (
 var (
 	// Metrics are all per-log (label "logid"), but may also be
 	// per-entrypoint (label "ep") or per-return-code (label "rc").
-	once             sync.Once
-	knownLogs        monitoring.Gauge     // logid => value (always 1.0)
-	maxMergeDelay    monitoring.Gauge     // logid => value
-	expMergeDelay    monitoring.Gauge     // logid => value
-	lastSCTTimestamp monitoring.Gauge     // logid => value
-	lastSTHTimestamp monitoring.Gauge     // logid => value
-	lastSTHTreeSize  monitoring.Gauge     // logid => value
-	reqsCounter      monitoring.Counter   // logid, ep => value
-	rspsCounter      monitoring.Counter   // logid, ep, rc => value
-	rspLatency       monitoring.Histogram // logid, ep, rc => value
+	once               sync.Once
+	knownLogs          monitoring.Gauge     // logid => value (always 1.0)
+	isMirrorLog        monitoring.Gauge     // logid => value (either 0.0 or 1.0)
+	maxMergeDelay      monitoring.Gauge     // logid => value
+	expMergeDelay      monitoring.Gauge     // logid => value
+	lastSCTTimestamp   monitoring.Gauge     // logid => value
+	lastSTHTimestamp   monitoring.Gauge     // logid => value
+	lastSTHTreeSize    monitoring.Gauge     // logid => value
+	frozenSTHTimestamp monitoring.Gauge     // logid => value
+	reqsCounter        monitoring.Counter   // logid, ep => value
+	rspsCounter        monitoring.Counter   // logid, ep, rc => value
+	rspLatency         monitoring.Histogram // logid, ep, rc => value
 )
 
 // setupMetrics initializes all the exported metrics.
 func setupMetrics(mf monitoring.MetricFactory) {
 	knownLogs = mf.NewGauge("known_logs", "Set to 1 for known logs", "logid")
+	isMirrorLog = mf.NewGauge("is_mirror", "Set to 1 for mirror logs", "logid")
 	maxMergeDelay = mf.NewGauge("max_merge_delay", "Maximum Merge Delay in seconds", "logid")
 	expMergeDelay = mf.NewGauge("expected_merge_delay", "Expected Merge Delay in seconds", "logid")
 	lastSCTTimestamp = mf.NewGauge("last_sct_timestamp", "Time of last SCT in ms since epoch", "logid")
 	lastSTHTimestamp = mf.NewGauge("last_sth_timestamp", "Time of last STH in ms since epoch", "logid")
 	lastSTHTreeSize = mf.NewGauge("last_sth_treesize", "Size of tree at last STH", "logid")
+	frozenSTHTimestamp = mf.NewGauge("frozen_sth_timestamp", "Time of the frozen STH in ms since epoch", "logid")
 	reqsCounter = mf.NewCounter("http_reqs", "Number of requests", "logid", "ep")
 	rspsCounter = mf.NewCounter("http_rsps", "Number of responses", "logid", "ep", "rc")
 	rspLatency = mf.NewHistogram("http_latency", "Latency of responses in seconds", "logid", "ep", "rc")
@@ -141,7 +147,7 @@ type AppHandler struct {
 // ServeHTTP for an AppHandler invokes the underlying handler function but
 // does additional common error and stats processing.
 func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var status int
+	var statusCode int
 	label0 := strconv.FormatInt(a.Info.logID, 10)
 	label1 := string(a.Name)
 	reqsCounter.Inc(label0, label1)
@@ -150,12 +156,12 @@ func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.Info.RequestLog.LogPrefix(logCtx, a.Info.LogPrefix)
 	defer func() {
 		latency := a.Info.TimeSource.Now().Sub(startTime).Seconds()
-		rspLatency.Observe(latency, label0, label1, strconv.Itoa(status))
+		rspLatency.Observe(latency, label0, label1, strconv.Itoa(statusCode))
 	}()
 	glog.V(2).Infof("%s: request %v %q => %s", a.Info.LogPrefix, r.Method, r.URL, a.Name)
 	if r.Method != a.Method {
 		glog.Warningf("%s: %s wrong HTTP method: %v", a.Info.LogPrefix, a.Name, r.Method)
-		sendHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed: %s", r.Method))
+		a.Info.SendHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed: %s", r.Method))
 		a.Info.RequestLog.Status(logCtx, http.StatusMethodNotAllowed)
 		return
 	}
@@ -164,7 +170,7 @@ func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// POSTs will decode the raw request body as JSON later.
 	if r.Method == http.MethodGet {
 		if err := r.ParseForm(); err != nil {
-			sendHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to parse form data: %s", err))
+			a.Info.SendHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to parse form data: %s", err))
 			a.Info.RequestLog.Status(logCtx, http.StatusBadRequest)
 			return
 		}
@@ -175,20 +181,21 @@ func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithDeadline(logCtx, getRPCDeadlineTime(a.Info))
 	defer cancel()
 
-	status, err := a.Handler(ctx, a.Info, w, r)
-	a.Info.RequestLog.Status(ctx, status)
-	glog.V(2).Infof("%s: %s <= status=%d", a.Info.LogPrefix, a.Name, status)
-	rspsCounter.Inc(label0, label1, strconv.Itoa(status))
+	var err error
+	statusCode, err = a.Handler(ctx, a.Info, w, r)
+	a.Info.RequestLog.Status(ctx, statusCode)
+	glog.V(2).Infof("%s: %s <= st=%d", a.Info.LogPrefix, a.Name, statusCode)
+	rspsCounter.Inc(label0, label1, strconv.Itoa(statusCode))
 	if err != nil {
 		glog.Warningf("%s: %s handler error: %v", a.Info.LogPrefix, a.Name, err)
-		sendHTTPError(w, status, err)
+		a.Info.SendHTTPError(w, statusCode, err)
 		return
 	}
 
-	// Additional check, for consistency the handler must return an error for non-200 status
-	if status != http.StatusOK {
-		glog.Warningf("%s: %s handler non 200 without error: %d %v", a.Info.LogPrefix, a.Name, status, err)
-		sendHTTPError(w, http.StatusInternalServerError, fmt.Errorf("http handler misbehaved, status: %d", status))
+	// Additional check, for consistency the handler must return an error for non-200 st
+	if statusCode != http.StatusOK {
+		glog.Warningf("%s: %s handler non 200 without error: %d %v", a.Info.LogPrefix, a.Name, statusCode, err)
+		a.Info.SendHTTPError(w, http.StatusInternalServerError, fmt.Errorf("http handler misbehaved, st: %d", statusCode))
 		return
 	}
 }
@@ -197,8 +204,13 @@ func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type CertValidationOpts struct {
 	// trustedRoots is a pool of certificates that defines the roots the CT log will accept
 	trustedRoots *PEMCertPool
-	// rejectExpired indicates whether certificate validity period should be used during chain verification
+	// currentTime is the time used for checking a certificate's validity period
+	// against. If it's zero then time.Now() is used. Only for testing.
+	currentTime time.Time
+	// rejectExpired indicates that expired certificates will be rejected.
 	rejectExpired bool
+	// rejectUnexpired indicates that certificates that are currently valid or not yet valid will be rejected.
+	rejectUnexpired bool
 	// notAfterStart is the earliest notAfter date which will be accepted.
 	// nil means no lower bound on the accepted range.
 	notAfterStart *time.Time
@@ -210,6 +222,22 @@ type CertValidationOpts struct {
 	acceptOnlyCA bool
 	// extKeyUsages contains the list of EKUs to use during chain verification
 	extKeyUsages []x509.ExtKeyUsage
+	// rejectExtIds contains a list of X.509 extension IDs to reject during chain verification.
+	rejectExtIds []asn1.ObjectIdentifier
+}
+
+// NewCertValidationOpts builds validation options based on parameters.
+func NewCertValidationOpts(trustedRoots *PEMCertPool, currentTime time.Time, rejectExpired bool, rejectUnexpired bool, notAfterStart *time.Time, notAfterLimit *time.Time, acceptOnlyCA bool, extKeyUsages []x509.ExtKeyUsage) CertValidationOpts {
+	var vOpts CertValidationOpts
+	vOpts.trustedRoots = trustedRoots
+	vOpts.currentTime = currentTime
+	vOpts.rejectExpired = rejectExpired
+	vOpts.rejectUnexpired = rejectUnexpired
+	vOpts.notAfterStart = notAfterStart
+	vOpts.notAfterLimit = notAfterLimit
+	vOpts.acceptOnlyCA = acceptOnlyCA
+	vOpts.extKeyUsages = extKeyUsages
+	return vOpts
 }
 
 // logInfo holds information for a specific log instance.
@@ -243,7 +271,10 @@ func newLogInfo(
 	signer crypto.Signer,
 	timeSource util.TimeSource,
 ) *logInfo {
-	logID, prefix := instanceOpts.Config.LogId, instanceOpts.Config.Prefix
+	vCfg := instanceOpts.Validated
+	cfg := vCfg.Config
+
+	logID, prefix := cfg.LogId, cfg.Prefix
 	li := &logInfo{
 		logID:          logID,
 		LogPrefix:      fmt.Sprintf("%s{%d}", prefix, logID),
@@ -255,17 +286,31 @@ func newLogInfo(
 		RequestLog:     instanceOpts.RequestLog,
 	}
 
-	if instanceOpts.Config.IsMirror {
-		li.sthGetter = &MirrorSTHGetter{li: li, st: DefaultMirrorSTHStorage{}}
-	} else {
-		li.sthGetter = &LogSTHGetter{li: li}
-	}
-
 	once.Do(func() { setupMetrics(instanceOpts.MetricFactory) })
 	label := strconv.FormatInt(logID, 10)
 	knownLogs.Set(1.0, label)
-	maxMergeDelay.Set(float64(instanceOpts.Config.MaxMergeDelaySec), label)
-	expMergeDelay.Set(float64(instanceOpts.Config.ExpectedMergeDelaySec), label)
+
+	switch {
+	case vCfg.FrozenSTH != nil:
+		li.sthGetter = &FrozenSTHGetter{sth: vCfg.FrozenSTH}
+		frozenSTHTimestamp.Set(float64(vCfg.FrozenSTH.Timestamp), label)
+
+	case cfg.IsMirror:
+		st := instanceOpts.STHStorage
+		if st == nil {
+			st = DefaultMirrorSTHStorage{}
+		}
+		li.sthGetter = &MirrorSTHGetter{li: li, st: st}
+
+	default:
+		li.sthGetter = &LogSTHGetter{li: li}
+	}
+
+	if cfg.IsMirror {
+		isMirrorLog.Set(1.0, label)
+	}
+	maxMergeDelay.Set(float64(cfg.MaxMergeDelaySec), label)
+	expMergeDelay.Set(float64(cfg.ExpectedMergeDelaySec), label)
 
 	return li
 }
@@ -290,7 +335,7 @@ func (li *logInfo) Handlers(prefix string) PathHandlers {
 		prefix + ct.GetEntryAndProofPath:  AppHandler{Info: li, Handler: getEntryAndProof, Name: GetEntryAndProofName, Method: http.MethodGet},
 	}
 	// Remove endpoints not provided by mirrors.
-	if li.instanceOpts.Config.IsMirror {
+	if li.instanceOpts.Validated.Config.IsMirror {
 		delete(ph, prefix+ct.AddChainPath)
 		delete(ph, prefix+ct.AddPreChainPath)
 	}
@@ -298,22 +343,45 @@ func (li *logInfo) Handlers(prefix string) PathHandlers {
 	return ph
 }
 
-func parseBodyAsJSONChain(li *logInfo, r *http.Request) (ct.AddChainRequest, error) {
+// SendHTTPError generates a custom error page to give more information on why something didn't work
+func (li *logInfo) SendHTTPError(w http.ResponseWriter, statusCode int, err error) {
+	errorBody := http.StatusText(statusCode)
+	if !li.instanceOpts.MaskInternalErrors || statusCode != http.StatusInternalServerError {
+		errorBody += fmt.Sprintf("\n%v", err)
+	}
+	http.Error(w, errorBody, statusCode)
+}
+
+// getSTH returns the current STH as known to the STH getter, and updates tree
+// size / timestamp metrics correspondingly.
+func (li *logInfo) getSTH(ctx context.Context) (*ct.SignedTreeHead, error) {
+	sth, err := li.sthGetter.GetSTH(ctx)
+	if err != nil {
+		return nil, err
+	}
+	logID := strconv.FormatInt(li.logID, 10)
+	lastSTHTimestamp.Set(float64(sth.Timestamp), logID)
+	lastSTHTreeSize.Set(float64(sth.TreeSize), logID)
+	return sth, nil
+}
+
+// ParseBodyAsJSONChain tries to extract cert-chain out of request.
+func ParseBodyAsJSONChain(r *http.Request) (ct.AddChainRequest, error) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		glog.V(1).Infof("%s: Failed to read request body: %v", li.LogPrefix, err)
+		glog.V(1).Infof("Failed to read request body: %v", err)
 		return ct.AddChainRequest{}, err
 	}
 
 	var req ct.AddChainRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		glog.V(1).Infof("%s: Failed to parse request body: %v", li.LogPrefix, err)
+		glog.V(1).Infof("Failed to parse request body: %v", err)
 		return ct.AddChainRequest{}, err
 	}
 
 	// The cert chain is not allowed to be empty. We'll defer other validation for later
 	if len(req.Chain) == 0 {
-		glog.V(1).Infof("%s: Request chain is empty: %s", li.LogPrefix, body)
+		glog.V(1).Infof("Request chain is empty: %s", body)
 		return ct.AddChainRequest{}, errors.New("cert chain was empty")
 	}
 
@@ -355,9 +423,9 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 	}
 
 	// Check the contents of the request and convert to slice of certificates.
-	addChainReq, err := parseBodyAsJSONChain(li, r)
+	addChainReq, err := ParseBodyAsJSONChain(r)
 	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to parse add-chain body: %s", err)
+		return http.StatusBadRequest, fmt.Errorf("%s: failed to parse add-chain body: %s", li.LogPrefix, err)
 	}
 	// Log the DERs now because they might not parse as valid X.509.
 	for _, der := range addChainReq.Chain {
@@ -452,33 +520,16 @@ func addPreChain(ctx context.Context, li *logInfo, w http.ResponseWriter, r *htt
 	return addChainInternal(ctx, li, w, r, true)
 }
 
-// PingTreeHead retrieves a tree head for the given log, and updates the STH
-// timestamp metrics correspondingly.
-// TODO(pavelkalinnikov): Should we cache the resulting STH?
-func PingTreeHead(ctx context.Context, client trillian.TrillianLogClient, logID int64, prefix string) error {
-	slr, err := getSignedLogRoot(ctx, client, logID, prefix)
-	if err != nil {
-		return err
-	}
-	lastSTHTimestamp.Set(float64(slr.TimestampNanos/1000/1000), strconv.FormatInt(logID, 10))
-	lastSTHTreeSize.Set(float64(slr.TreeSize), strconv.FormatInt(logID, 10))
-	return nil
-}
-
 func getSTH(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
 	qctx := ctx
 	if li.instanceOpts.RemoteQuotaUser != nil {
 		rqu := li.instanceOpts.RemoteQuotaUser(r)
 		qctx = context.WithValue(qctx, remoteQuotaCtxKey, rqu)
 	}
-
-	sth, err := li.sthGetter.GetSTH(qctx)
+	sth, err := li.getSTH(qctx)
 	if err != nil {
 		return li.toHTTPStatus(err), err
 	}
-	lastSTHTimestamp.Set(float64(sth.Timestamp), strconv.FormatInt(li.logID, 10))
-	lastSTHTreeSize.Set(float64(sth.TreeSize), strconv.FormatInt(li.logID, 10))
-
 	if err := writeSTH(sth, w); err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -514,6 +565,7 @@ func writeSTH(sth *ct.SignedTreeHead, w http.ResponseWriter) error {
 	return nil
 }
 
+// nolint:staticcheck
 func getSTHConsistency(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
 	first, second, err := parseGetSTHConsistencyRange(r)
 	if err != nil {
@@ -536,9 +588,13 @@ func getSTHConsistency(ctx context.Context, li *logInfo, w http.ResponseWriter, 
 			return li.toHTTPStatus(err), fmt.Errorf("backend GetConsistencyProof request failed: %s", err)
 		}
 
+		var currentRoot types.LogRootV1
+		if err := currentRoot.UnmarshalBinary(rsp.GetSignedLogRoot().GetLogRoot()); err != nil {
+			return http.StatusInternalServerError, fmt.Errorf("failed to unmarshal root: %v", rsp.GetSignedLogRoot().GetLogRoot())
+		}
 		// We can get here with a tree size too small to satisfy the proof.
-		if rsp.SignedLogRoot != nil && rsp.SignedLogRoot.TreeSize < second {
-			return http.StatusBadRequest, fmt.Errorf("need tree size: %d for proof but only got: %d", second, rsp.SignedLogRoot.TreeSize)
+		if currentRoot.TreeSize < uint64(second) {
+			return http.StatusBadRequest, fmt.Errorf("need tree size: %d for proof but only got: %d", second, currentRoot.TreeSize)
 		}
 
 		// Additional sanity checks, none of the hashes in the returned path should be empty
@@ -571,6 +627,7 @@ func getSTHConsistency(ctx context.Context, li *logInfo, w http.ResponseWriter, 
 	return http.StatusOK, nil
 }
 
+// nolint:staticcheck
 func getProofByHash(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
 	// Accept any non empty hash that decodes from base64 and let the backend validate it further
 	hash := r.FormValue(getProofParamHash)
@@ -604,10 +661,14 @@ func getProofByHash(ctx context.Context, li *logInfo, w http.ResponseWriter, r *
 		return li.toHTTPStatus(err), fmt.Errorf("backend GetInclusionProofByHash request failed: %s", err)
 	}
 
+	var currentRoot types.LogRootV1
+	if err := currentRoot.UnmarshalBinary(rsp.GetSignedLogRoot().GetLogRoot()); err != nil {
+		return http.StatusInternalServerError, fmt.Errorf("failed to unmarshal root: %v", rsp.GetSignedLogRoot().GetLogRoot())
+	}
 	// We could fail to get the proof because the tree size that the server has
 	// is not large enough.
-	if rsp.SignedLogRoot != nil && rsp.SignedLogRoot.TreeSize < treeSize {
-		return http.StatusNotFound, fmt.Errorf("log returned tree size: %d but we expected: %d", rsp.SignedLogRoot.TreeSize, treeSize)
+	if currentRoot.TreeSize < uint64(treeSize) {
+		return http.StatusNotFound, fmt.Errorf("log returned tree size: %d but we expected: %d", currentRoot.TreeSize, treeSize)
 	}
 
 	// Additional sanity checks on the response.
@@ -645,6 +706,7 @@ func getProofByHash(ctx context.Context, li *logInfo, w http.ResponseWriter, r *
 	return http.StatusOK, nil
 }
 
+// nolint:staticcheck
 func getEntries(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
 	// The first job is to parse the params and make sure they're sensible. We just make
 	// sure the range is valid. We don't do an extra roundtrip to get the current tree
@@ -669,10 +731,14 @@ func getEntries(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http
 		if err != nil {
 			return li.toHTTPStatus(err), fmt.Errorf("backend GetLeavesByRange request failed: %s", err)
 		}
-		if rsp.SignedLogRoot != nil && rsp.SignedLogRoot.TreeSize <= start {
+		var currentRoot types.LogRootV1
+		if err := currentRoot.UnmarshalBinary(rsp.GetSignedLogRoot().GetLogRoot()); err != nil {
+			return http.StatusInternalServerError, fmt.Errorf("failed to unmarshal root: %v", rsp.GetSignedLogRoot().GetLogRoot())
+		}
+		if currentRoot.TreeSize <= uint64(start) {
 			// If the returned tree is too small to contain any leaves return the 4xx
 			// explicitly here.
-			return http.StatusBadRequest, fmt.Errorf("need tree size: %d to get leaves but only got: %d", rsp.SignedLogRoot.TreeSize, start)
+			return http.StatusBadRequest, fmt.Errorf("need tree size: %d to get leaves but only got: %d", start+1, currentRoot.TreeSize)
 		}
 		// Do some sanity checks on the result.
 		if len(rsp.Leaves) > int(count) {
@@ -695,11 +761,15 @@ func getEntries(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http
 			return li.toHTTPStatus(err), fmt.Errorf("backend GetLeavesByIndex request failed: %s", err)
 		}
 
-		if rsp.SignedLogRoot != nil && rsp.SignedLogRoot.TreeSize <= start {
+		var currentRoot types.LogRootV1
+		if err := currentRoot.UnmarshalBinary(rsp.GetSignedLogRoot().GetLogRoot()); err != nil {
+			return http.StatusInternalServerError, fmt.Errorf("failed to unmarshal root: %v", rsp.GetSignedLogRoot().GetLogRoot())
+		}
+		if currentRoot.TreeSize <= uint64(start) {
 			// If the returned tree is too small to contain any leaves return the 4xx
 			// explicitly here. It was previously returned via the error status
 			// mapping above.
-			return http.StatusBadRequest, fmt.Errorf("need tree size: %d to get leaves but only got: %d", rsp.SignedLogRoot.TreeSize, start)
+			return http.StatusBadRequest, fmt.Errorf("need tree size: %d to get leaves but only got: %d", start+1, currentRoot.TreeSize)
 		}
 
 		// Trillian doesn't guarantee the returned leaves are in order (they don't need to be
@@ -736,7 +806,7 @@ func getEntries(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http
 	return http.StatusOK, nil
 }
 
-func getRoots(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
+func getRoots(_ context.Context, li *logInfo, w http.ResponseWriter, _ *http.Request) (int, error) {
 	// Pull out the raw certificates from the parsed versions
 	rawCerts := make([][]byte, 0, len(li.validationOpts.trustedRoots.RawCertificates()))
 	for _, cert := range li.validationOpts.trustedRoots.RawCertificates() {
@@ -756,6 +826,7 @@ func getRoots(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.R
 }
 
 // See RFC 6962 Section 4.8.
+// nolint:staticcheck
 func getEntryAndProof(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
 	// Ensure both numeric params are present and look reasonable.
 	leafIndex, treeSize, err := parseGetEntryAndProofParams(r)
@@ -776,10 +847,14 @@ func getEntryAndProof(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 		return li.toHTTPStatus(err), fmt.Errorf("backend GetEntryAndProof request failed: %s", err)
 	}
 
-	if rsp.SignedLogRoot != nil && rsp.SignedLogRoot.TreeSize < treeSize {
+	var currentRoot types.LogRootV1
+	if err := currentRoot.UnmarshalBinary(rsp.GetSignedLogRoot().GetLogRoot()); err != nil {
+		return http.StatusInternalServerError, fmt.Errorf("failed to unmarshal root: %v", rsp.GetSignedLogRoot().GetLogRoot())
+	}
+	if currentRoot.TreeSize < uint64(treeSize) {
 		// If tree size is not large enough return the 4xx here, would previously
 		// have come from the error status mapping above.
-		return http.StatusBadRequest, fmt.Errorf("need tree size: %d for proof but only got: %d", req.TreeSize, rsp.SignedLogRoot.TreeSize)
+		return http.StatusBadRequest, fmt.Errorf("need tree size: %d for proof but only got: %d", req.TreeSize, currentRoot.TreeSize)
 	}
 
 	// Apply some checks that we got reasonable data from the backend
@@ -811,12 +886,6 @@ func getEntryAndProof(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 	}
 
 	return http.StatusOK, nil
-}
-
-// Generates a custom error page to give more information on why something didn't work
-// TODO(Martin2112): Not sure if we want to expose any detail or not
-func sendHTTPError(w http.ResponseWriter, statusCode int, err error) {
-	http.Error(w, fmt.Sprintf("%s\n%v", http.StatusText(statusCode), err), statusCode)
 }
 
 // getRPCDeadlineTime calculates the future time an RPC should expire based on our config
