@@ -12,7 +12,7 @@
      - [Integration Tests](#integration-tests)
  - [Working on the Code](#working-on-the-code)
      - [Rebuilding Generated Code](#rebuilding-generated-code)
-     - [Updating Dependencies](#updating-dependencies)
+     - [Updating Vendor Code](#updating-vendor-code)
      - [Running Codebase Checks](#running-codebase-checks)
  - [Design](#design)
      - [Design Overview](#design-overview)
@@ -74,30 +74,21 @@ is now being used in production by several organizations. We will try to avoid
 any further incompatible code and schema changes but cannot guarantee that they
 will never be necessary.
 
-The current state of feature implementation is recorded in the
-[Feature implementation matrix](docs/Feature_Implementation_Matrix.md).
-
 To build and test Trillian you need:
 
- - Go 1.11 or later.
+ - Go 1.9 or later.
 
 To run many of the tests (and production deployment) you need:
 
  - [MySQL](https://www.mysql.com/) or [MariaDB](https://mariadb.org/) to provide
    the data storage layer; see the [MySQL Setup](#mysql-setup) section.
 
-Note that this repository uses Go modules to manage dependencies; Go will fetch
-and install them automatically upon build/test.
-
-To fetch the code, dependencies, and build Trillian, run the following:
+Use the standard Go tools to install other dependencies.
 
 ```bash
-export GO111MODULE=auto
-
-git clone https://github.com/google/trillian.git
-cd trillian
-
-go build ./...
+go get github.com/google/trillian
+cd $GOPATH/src/github.com/google/trillian
+go get -t -u -v ./...
 ```
 
 To build and run tests, use:
@@ -106,6 +97,13 @@ To build and run tests, use:
 go test ./...
 ```
 
+Note that go seems to sometimes fail to fetch or update all dependencies (as of
+v1.10.2), so you may need to manually fetch missing ones, or update all Go
+source with:
+
+```bash
+go get -u -v all
+```
 
 The repository also includes multi-process integration tests, described in the
 [Integration Tests](#integration-tests) section below.
@@ -120,8 +118,8 @@ running and configured to:
    --port=3306` connects OK)
  - not require a password for the `root` user
 
-You can then set up the [expected tables](storage/mysql/schema/storage.sql) in a
-`test` database like so:
+You can then set up the [expected tables](storage/mysql/storage.sql) in a `test`
+database like so:
 
 ```bash
 ./scripts/resetdb.sh
@@ -185,9 +183,10 @@ the original files; if you do, you'll need to install the prerequisites:
 
   - `mockgen` tool from https://github.com/golang/mock
   - `stringer` tool from https://golang.org/x/tools/cmd/stringer
-  - `protoc`, [Go support for protoc](https://github.com/golang/protobuf),
-     [grpc-gateway](https://github.com/grpc-ecosystem/grpc-gateway) and
-     [protoc-gen-doc](https://github.com/pseudomuto/protoc-gen-doc).
+  - `protoc`, [Go support for protoc](https://github.com/golang/protobuf) and
+     [grpc-gateway](https://github.com/grpc-ecosystem/grpc-gateway) (see
+     documentation linked from the
+     [protobuf site](https://github.com/google/protobuf))
   - protocol buffer definitions for standard Google APIs:
 
     ```bash
@@ -200,24 +199,33 @@ and run the following:
 go generate -x ./...  # hunts for //go:generate comments and runs them
 ```
 
-### Updating Dependencies
+### Updating Vendor Code
 
-The Trillian codebase uses go.mod to declare fixed versions of its dependencies. 
-With Go modules, updating a dependency simply involves running `go get`:
-```
-export GO111MODULE=on
-go get package/path       # Fetch the latest published version
-go get package/path@X.Y.Z # Fetch a specific published version
-go get package/path@HEAD  # Fetch the latest commit 
+The Trillian codebase includes a couple of external projects under the `vendor/`
+subdirectory, to ensure that builds use a fixed version (typically because the
+upstream repository does not guarantee back-compatibility between the tip
+`master` branch and the current stable release).  These external codebases are
+included as Git
+[subtrees](https://github.com/git/git/blob/master/contrib/subtree/git-subtree.txt).
+
+To update the code in one of these subtrees, perform steps like:
+
+```bash
+# Add master repo for upstream code as a Git remote.
+git remote add vendor-xyzzy https://github.com/orgname/xyzzy
+# Pull the updated code for the desired version tag from the remote, dropping history.
+# Trailing / in prefix is needed.
+git subtree pull --squash --prefix=vendor/github.com/orgname/xyzzy/ vendor-xyzzy vX.Y.Z
 ```
 
-To update ALL dependencies to the latest version run `go get -u`. 
-Be warned however, that this may undo any selected versions that resolve issues in other non-module repos. 
+If new `vendor/` subtree is required, perform steps similar to:
 
-While running `go build` and `go test`, go will add any ambiguous transitive dependencies to `go.mod`
-To clean these up run:
-```
-go mod tidy
+```bash
+# Add master repo for upstream code as a Git remote.
+git remote add vendor-xyzzy https://github.com/orgname/xyzzy
+# Pull the desired version of the code in, dropping history.
+# Trailing / in --prefix is needed.
+git subtree add --squash --prefix=vendor/github.com/orgname/xyzzy/ vendor-xyzzy vX.Y.Z
 ```
 
 ### Running Codebase Checks
@@ -225,25 +233,16 @@ go mod tidy
 The [`scripts/presubmit.sh`](scripts/presubmit.sh) script runs various tools
 and tests over the codebase.
 
-#### Install [golangci-lint](https://github.com/golangci/golangci-lint#local-installation).
 ```bash
-go install github.com/golangci/golangci-lint/cmd/golangci-lint
-```
+# Install gometalinter and all linters
+go get -u github.com/alecthomas/gometalinter
+gometalinter --install
 
-#### Install [prototool](https://github.com/uber/prototool#installation)
-```bash
-go install github.com/uber/prototool/cmd/prototool
-```
-
-#### Run code generation, build, test and linters
-```bash
+# Run code generation, build, test and linters
 ./scripts/presubmit.sh
-```
 
-#### Or just run the linters alone
-```bash
-golangci-lint run
-prototool lint
+# Or just run the linters alone:
+gometalinter --config=gometalinter.json ./...
 ```
 
 

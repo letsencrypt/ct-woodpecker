@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/trillian"
 	"github.com/google/trillian/storage"
@@ -152,7 +151,7 @@ func (t *adminTX) CreateTree(ctx context.Context, tr *trillian.Tree) (*trillian.
 
 	now := time.Now()
 
-	meta := proto.Clone(tr).(*trillian.Tree)
+	meta := *tr
 	meta.TreeId = id
 	meta.CreateTime, err = ptypes.TimestampProto(now)
 	if err != nil {
@@ -169,7 +168,7 @@ func (t *adminTX) CreateTree(ctx context.Context, tr *trillian.Tree) (*trillian.
 
 	glog.V(1).Infof("trees: %v", t.ms.trees)
 
-	return meta, nil
+	return &meta, nil
 }
 
 func (t *adminTX) UpdateTree(ctx context.Context, treeID int64, updateFunc func(*trillian.Tree)) (*trillian.Tree, error) {
@@ -178,9 +177,9 @@ func (t *adminTX) UpdateTree(ctx context.Context, treeID int64, updateFunc func(
 	defer mTree.mu.Unlock()
 
 	tree := mTree.meta
-	beforeUpdate := proto.Clone(tree).(*trillian.Tree)
+	beforeUpdate := *tree
 	updateFunc(tree)
-	if err := storage.ValidateTreeForUpdate(ctx, beforeUpdate, tree); err != nil {
+	if err := storage.ValidateTreeForUpdate(ctx, &beforeUpdate, tree); err != nil {
 		return nil, err
 	}
 	if err := validateStorageSettings(tree); err != nil {

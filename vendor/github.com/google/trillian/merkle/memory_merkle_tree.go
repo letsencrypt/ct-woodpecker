@@ -115,7 +115,7 @@ func isPowerOfTwoPlusOne(leafCount int64) bool {
 	}
 	// leaf_count is a power of two plus one if and only if
 	// ((leaf_count - 1) & (leaf_count - 2)) has no bits set.
-	return ((leafCount - 1) & (leafCount - 2)) == 0
+	return (((leafCount - 1) & (leafCount - 2)) == 0)
 }
 
 // sibling returns the index of the node's (left or right) sibling in the same level.
@@ -228,10 +228,13 @@ func (mt *InMemoryMerkleTree) popBack(level int64) {
 //
 // Returns the position of the leaf in the tree. Indexing starts at 1,
 // so position = number of leaves in the tree after this update.
-func (mt *InMemoryMerkleTree) AddLeaf(leafData []byte) (int64, TreeEntry) {
-	leafHash := mt.hasher.HashLeaf(leafData)
+func (mt *InMemoryMerkleTree) AddLeaf(leafData []byte) (int64, TreeEntry, error) {
+	leafHash, err := mt.hasher.HashLeaf(leafData)
+	if err != nil {
+		return 0, TreeEntry{}, err
+	}
 	leafCount, treeEntry := mt.addLeafHash(leafHash)
-	return leafCount, treeEntry
+	return leafCount, treeEntry, nil
 }
 
 func (mt *InMemoryMerkleTree) addLeafHash(leafData []byte) (int64, TreeEntry) {

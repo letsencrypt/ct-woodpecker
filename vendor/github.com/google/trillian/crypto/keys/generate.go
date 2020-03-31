@@ -25,7 +25,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/trillian/crypto/keyspb"
-	"golang.org/x/crypto/ed25519"
 )
 
 const (
@@ -51,7 +50,6 @@ func NewFromSpec(spec *keyspb.Specification) (crypto.Signer, error) {
 		}
 
 		return ecdsa.GenerateKey(curve, rand.Reader)
-
 	case *keyspb.Specification_RsaParams:
 		bits := int(params.RsaParams.GetBits())
 		if bits == 0 {
@@ -62,11 +60,6 @@ func NewFromSpec(spec *keyspb.Specification) (crypto.Signer, error) {
 		}
 
 		return rsa.GenerateKey(rand.Reader, bits)
-
-	case *keyspb.Specification_Ed25519Params:
-		_, privKey, err := ed25519.GenerateKey(rand.Reader)
-		return privKey, err
-
 	default:
 		return nil, fmt.Errorf("unsupported keygen params type: %T", params)
 	}

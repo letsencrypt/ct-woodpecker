@@ -14,11 +14,9 @@
 
 syntax = "proto3";
 
-option go_package = "github.com/google/certificate-transparency-go/trillian/ctfe/configpb";
-
 package configpb;
 
-import "crypto/keyspb/keyspb.proto";
+import "github.com/google/trillian/crypto/keyspb/keyspb.proto";
 import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
@@ -45,7 +43,7 @@ message LogConfigSet {
 
 // LogConfig describes the configuration options for a log instance.
 //
-// NEXT_ID: 19
+// NEXT_ID: 16
 message LogConfig {
   // The ID of a Trillian tree that stores the log data. The tree type must be
   // LOG for regular CT logs. For mirror logs it must be either PREORDERED_LOG
@@ -78,9 +76,6 @@ message LogConfig {
   // checked against the current time during the validation of submissions.
   // This will cause expired certificates to be rejected.
   bool reject_expired = 6;
-  // If reject_unexpired is true then CTFE rejects certificates that are either
-  // currently valid or not yet valid.
-  bool reject_unexpired = 17;
   // If set, ext_key_usages will restrict the set of such usages that the
   // server will accept. By default all are accepted. The values specified
   // must be ones known to the x509 package.
@@ -115,19 +110,7 @@ message LogConfig {
   // provide. This option is exposed in CTFE metrics, and can be particularly
   // useful to catch when the log is behind but has not yet violated the strict
   // MMD limit.
-  // Log operator should decide what exactly EMD means for them. For example, it
-  // can be a 99-th percentile of merge delays that they observe, and they can
-  // alert on the actual merge delay going above a certain multiple of this EMD.
   int32 expected_merge_delay_sec = 15;
-
-  // The STH that this log will serve permanently (if present). Frozen STH must
-  // be signed by this log's private key, and will be verified using the public
-  // key specified in this config.
-  SignedTreeHead frozen_sth = 16;
-
-  // A list of X.509 extension OIDs, in dotted string form (e.g. "2.3.4.5")
-  // which should cause submissions to be rejected.
-  repeated string reject_extensions = 18;
 }
 
 // LogMultiConfig wraps up a LogBackendSet and corresponding LogConfigSet so
@@ -139,14 +122,4 @@ message LogMultiConfig {
   // The set of logs that will use the above backends. All the protos in this
   // LogConfigSet must set a valid log_backend_name for the config to be usable.
   LogConfigSet log_configs = 2;
-}
-
-// SignedTreeHead represents the structure returned by the get-sth CT method.
-// See RFC6962 sections 3.5 and 4.3 for reference.
-// TODO(pavelkalinnikov): Find a better place for this type.
-message SignedTreeHead {
-  int64 tree_size = 1;
-  int64 timestamp = 2;
-  bytes sha256_root_hash = 3;
-  bytes tree_head_signature = 4;
 }

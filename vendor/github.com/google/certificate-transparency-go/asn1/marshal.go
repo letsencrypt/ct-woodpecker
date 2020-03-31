@@ -631,8 +631,6 @@ func makeField(v reflect.Value, params fieldParameters) (e encoder, err error) {
 	if params.tag != nil {
 		if params.application {
 			class = ClassApplication
-		} else if params.private {
-			class = ClassPrivate
 		} else {
 			class = ClassContextSpecific
 		}

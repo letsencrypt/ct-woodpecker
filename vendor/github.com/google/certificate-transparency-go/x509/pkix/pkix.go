@@ -7,12 +7,14 @@
 package pkix
 
 import (
+	// START CT CHANGES
 	"encoding/hex"
 	"fmt"
-	"math/big"
-	"time"
 
 	"github.com/google/certificate-transparency-go/asn1"
+	// END CT CHANGES
+	"math/big"
+	"time"
 )
 
 // AlgorithmIdentifier represents the ASN.1 structure of the same name. See RFC
@@ -96,7 +98,7 @@ func (r RDNSequence) String() string {
 type RelativeDistinguishedNameSET []AttributeTypeAndValue
 
 // AttributeTypeAndValue mirrors the ASN.1 structure of the same name in
-// RFC 5280, Section 4.1.2.4.
+// http://tools.ietf.org/html/rfc5280#section-4.1.2.4
 type AttributeTypeAndValue struct {
 	Type  asn1.ObjectIdentifier
 	Value interface{}
@@ -238,7 +240,7 @@ func (n Name) String() string {
 	return n.ToRDNSequence().String()
 }
 
-// oidInAttributeTypeAndValue reports whether a type with the given OID exists
+// oidInAttributeTypeAndValue returns whether a type with the given OID exists
 // in atv.
 func oidInAttributeTypeAndValue(oid asn1.ObjectIdentifier, atv []AttributeTypeAndValue) bool {
 	for _, a := range atv {

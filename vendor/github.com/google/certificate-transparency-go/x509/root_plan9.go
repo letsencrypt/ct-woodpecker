@@ -33,8 +33,5 @@ func loadSystemRoots() (*CertPool, error) {
 			bestErr = err
 		}
 	}
-	if bestErr == nil {
-		return roots, nil
-	}
 	return nil, bestErr
 }

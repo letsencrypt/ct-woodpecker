@@ -19,7 +19,4 @@ func systemRootsPool() *CertPool {
 
 func initSystemRoots() {
 	systemRoots, systemRootsErr = loadSystemRoots()
-	if systemRootsErr != nil {
-		systemRoots = nil
-	}
 }

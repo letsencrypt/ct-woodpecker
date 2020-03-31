@@ -111,10 +111,10 @@ func (a kv) Less(b btree.Item) bool {
 }
 
 // newTree creates and initializes a tree struct.
-func newTree(t *trillian.Tree) *tree {
+func newTree(t trillian.Tree) *tree {
 	ret := &tree{
 		store: btree.New(degree),
-		meta:  proto.Clone(t).(*trillian.Tree),
+		meta:  &t,
 	}
 	k := unseqKey(t.TreeId)
 	k.(*kv).v = list.New()
@@ -220,7 +220,7 @@ func (t *treeTX) storeSubtrees(ctx context.Context, subtrees []*storagepb.Subtre
 		if s.Prefix == nil {
 			panic(fmt.Errorf("nil prefix on %v", s))
 		}
-		k := subtreeKey(t.treeID, t.writeRevision, *storage.NewNodeIDFromHash(s.Prefix))
+		k := subtreeKey(t.treeID, t.writeRevision, storage.NewNodeIDFromHash(s.Prefix))
 		k.(*kv).v = s
 		t.tx.ReplaceOrInsert(k)
 	}
@@ -252,12 +252,12 @@ func (t *treeTX) SetMerkleNodes(ctx context.Context, nodes []storage.Node) error
 	return nil
 }
 
-func (t *treeTX) Commit(ctx context.Context) error {
+func (t *treeTX) Commit() error {
 	defer t.unlock()
 
 	if t.writeRevision > -1 {
-		if err := t.subtreeCache.Flush(ctx, func(ctx context.Context, st []*storagepb.SubtreeProto) error {
-			return t.storeSubtrees(ctx, st)
+		if err := t.subtreeCache.Flush(func(st []*storagepb.SubtreeProto) error {
+			return t.storeSubtrees(context.TODO(), st)
 		}); err != nil {
 			glog.Warningf("TX commit flush error: %v", err)
 			return err

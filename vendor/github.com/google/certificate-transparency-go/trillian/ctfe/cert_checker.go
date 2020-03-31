@@ -18,19 +18,24 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/google/certificate-transparency-go/asn1"
 	"github.com/google/certificate-transparency-go/x509"
 )
+
+// OID of the non-critical extension used to mark pre-certificates, defined in RFC 6962
+var ctPoisonExtensionOID = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 4, 3}
+
+// Byte representation of ASN.1 NULL.
+var asn1NullBytes = []byte{0x05, 0x00}
 
 // IsPrecertificate tests if a certificate is a pre-certificate as defined in CT.
 // An error is returned if the CT extension is present but is not ASN.1 NULL as defined
 // by the spec.
 func IsPrecertificate(cert *x509.Certificate) (bool, error) {
 	for _, ext := range cert.Extensions {
-		if x509.OIDExtensionCTPoison.Equal(ext.Id) {
-			if !ext.Critical || !bytes.Equal(asn1.NullBytes, ext.Value) {
+		if ctPoisonExtensionOID.Equal(ext.Id) {
+			if !ext.Critical || !bytes.Equal(asn1NullBytes, ext.Value) {
 				return false, fmt.Errorf("CT poison ext is not critical or invalid: %v", ext)
 			}
 
@@ -67,55 +72,26 @@ func ValidateChain(rawChain [][]byte, validationOpts CertValidationOpts) ([]*x50
 
 	naStart := validationOpts.notAfterStart
 	naLimit := validationOpts.notAfterLimit
-	cert := chain[0]
 
-	// Check whether the expiry date of the cert is within the acceptable range.
-	if naStart != nil && cert.NotAfter.Before(*naStart) {
-		return nil, fmt.Errorf("certificate NotAfter (%v) < %v", cert.NotAfter, *naStart)
+	// Check whether the expiry date of this certificate is within the acceptable
+	// range.
+	if naStart != nil && chain[0].NotAfter.Before(*naStart) {
+		return nil, fmt.Errorf("certificate NotAfter (%v) < %v", chain[0].NotAfter, *naStart)
 	}
-	if naLimit != nil && !cert.NotAfter.Before(*naLimit) {
-		return nil, fmt.Errorf("certificate NotAfter (%v) >= %v", cert.NotAfter, *naLimit)
+	if naLimit != nil && !chain[0].NotAfter.Before(*naLimit) {
+		return nil, fmt.Errorf("certificate NotAfter (%v) >= %v", chain[0].NotAfter, *naLimit)
 	}
 
-	if validationOpts.acceptOnlyCA && !cert.IsCA {
+	if validationOpts.acceptOnlyCA && !chain[0].IsCA {
 		return nil, errors.New("only certificates with CA bit set are accepted")
-	}
-
-	now := validationOpts.currentTime
-	if now.IsZero() {
-		now = time.Now()
-	}
-	expired := now.After(cert.NotAfter)
-	if validationOpts.rejectExpired && expired {
-		return nil, errors.New("rejecting expired certificate")
-	}
-	if validationOpts.rejectUnexpired && !expired {
-		return nil, errors.New("rejecting unexpired certificate")
-	}
-
-	// Check for unwanted extension types, if required.
-	// TODO(al): Refactor CertValidationOpts c'tor to a builder pattern and
-	// pre-calc this in there
-	if len(validationOpts.rejectExtIds) != 0 {
-		badIDs := make(map[string]bool)
-		for _, id := range validationOpts.rejectExtIds {
-			badIDs[id.String()] = true
-		}
-		for idx, ext := range cert.Extensions {
-			extOid := ext.Id.String()
-			if _, ok := badIDs[extOid]; ok {
-				return nil, fmt.Errorf("rejecting certificate containing extension %v at index %d", extOid, idx)
-			}
-		}
 	}
 
 	// We can now do the verification.  Use fairly lax options for verification, as
 	// CT is intended to observe certificates rather than police them.
 	verifyOpts := x509.VerifyOptions{
 		Roots:             validationOpts.trustedRoots.CertPool(),
-		CurrentTime:       now,
 		Intermediates:     intermediatePool.CertPool(),
-		DisableTimeChecks: true,
+		DisableTimeChecks: !validationOpts.rejectExpired,
 		// Precertificates have the poison extension; also the Go library code does not
 		// support the standard PolicyConstraints extension (which is required to be marked
 		// critical, RFC 5280 s4.2.1.11), so never check unhandled critical extensions.
@@ -133,7 +109,7 @@ func ValidateChain(rawChain [][]byte, validationOpts CertValidationOpts) ([]*x50
 		KeyUsages:                   validationOpts.extKeyUsages,
 	}
 
-	verifiedChains, err := cert.Verify(verifyOpts)
+	verifiedChains, err := chain[0].Verify(verifyOpts)
 	if err != nil {
 		return nil, err
 	}
