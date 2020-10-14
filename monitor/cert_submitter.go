@@ -150,7 +150,7 @@ type certSubmitter struct {
 	submitPreCert bool
 	// Should a final cert be submitted?
 	submitCert bool
-	// Should an already included duplicate cert be submitted
+	// Should an already-included duplicate cert be submitted
 	resubmitIncluded bool
 	// If not nil, constrain generated certificate validity to within the provided
 	// window.

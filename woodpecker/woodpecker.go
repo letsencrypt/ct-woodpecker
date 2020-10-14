@@ -53,6 +53,11 @@ type CertSubmitConfig struct {
 	// Interval is a duration string describing the sleep period between
 	// submitting certificates to the monitor logs
 	Interval string
+
+	// ResubmitIncluded is a bool controlling whether the submitter should
+	// re-submit and monitor an already-included certificate
+	ResubmitIncluded bool
+
 	// Timeout is a duration string describing the timeout for precert/cert
 	// submissions
 	Timeout string
@@ -287,6 +292,7 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 	var certTimeout time.Duration
 	var issuerCert *x509.Certificate
 	var issuerKey *ecdsa.PrivateKey
+	var resubmitIncluded bool
 	if c.SubmitConfig != nil {
 		certInterval, err = time.ParseDuration(c.SubmitConfig.Interval)
 		if err != nil {
@@ -306,6 +312,7 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 			return nil, fmt.Errorf("loading issuer key from %q: %s", c.SubmitConfig.CertIssuerKeyPath, err)
 		}
 		issuerKey = key
+		resubmitIncluded = c.SubmitConfig.ResubmitIncluded
 	}
 
 	var inclusionInterval time.Duration
@@ -342,14 +349,15 @@ func New(c Config, stdout, stderr *log.Logger, clk clock.Clock) (*Woodpecker, er
 				windowEnd = &end
 			}
 			opts.SubmitOpts = &monitor.SubmitterOptions{
-				Interval:      certInterval,
-				Timeout:       certTimeout,
-				IssuerCert:    issuerCert,
-				IssuerKey:     issuerKey,
-				SubmitPreCert: logConf.SubmitPreCert,
-				SubmitCert:    logConf.SubmitCert,
-				WindowStart:   windowStart,
-				WindowEnd:     windowEnd,
+				Interval:         certInterval,
+				Timeout:          certTimeout,
+				IssuerCert:       issuerCert,
+				IssuerKey:        issuerKey,
+				ResubmitIncluded: resubmitIncluded,
+				SubmitPreCert:    logConf.SubmitPreCert,
+				SubmitCert:       logConf.SubmitCert,
+				WindowStart:      windowStart,
+				WindowEnd:        windowEnd,
 			}
 		}
 		if c.InclusionConfig != nil {
