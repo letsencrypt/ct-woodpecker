@@ -21,6 +21,37 @@ linters:
     - gochecknoinits
     - gochecknoglobals
     - typecheck # Go 1.13 incompatible pending new golangci-lint binary release
+    - forbidigo
+    - funlen
+    - varnamelen
+    - wrapcheck
+    - nolintlint
+    - testpackage
+    - paralleltest
+    - noctx
+    - ifshort
+    - nlreturn
+    - ireturn
+    - tagliatelle
+    - thelper
+    - gomnd
+    - goerr113
+    - gci
+    - exhaustive
+    - exhaustivestruct
+    - errorlint
+    - rowserrcheck
+    - cyclop
+    - wsl
+    - promlinter
+    - misspell
+    - nestif
+    - bodyclose
+    - godox
+    - forcetypeassert
+    - gofumpt
+    - godot
+    - gocognit
 
 issues:
   exclude:
