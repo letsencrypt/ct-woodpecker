@@ -9,10 +9,10 @@ import (
 	"time"
 
 	ct "github.com/google/certificate-transparency-go"
-	"github.com/google/trillian/merkle"
 	"github.com/google/trillian/merkle/rfc6962"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/transparency-dev/merkle"
 )
 
 // sthFetchStats is a type to hold the prometheus metrics used by
@@ -86,7 +86,7 @@ func (o FetcherOptions) Valid() error {
 // functions that the sthFetcher uses. This interface allows for easy
 // shimming of client methods with mock implementations for unit testing.
 type sthFetcherVerifier interface {
-	VerifyConsistencyProof(int64, int64, []byte, []byte, [][]byte) error
+	VerifyInclusion(uint64, uint64, []byte, [][]byte, []byte) error
 }
 
 // sthFetcher is a monitorCheck type for periodically fetching a log's STH and publishing
@@ -290,12 +290,12 @@ func (f *sthFetcher) verifySTHConsistency(firstSTH, secondSTH *ct.SignedTreeHead
 
 	// Verify the consistency proof. If the proof fails to verify then publish an
 	// increment to the `sthInconsistencies` stat
-	if err := f.verifier.VerifyConsistencyProof(
-		int64(firstTreeSize),
-		int64(secondTreeSize),
+	if err := f.verifier.VerifyInclusion(
+		firstTreeSize,
+		secondTreeSize,
 		firstHash,
-		secondHash,
-		consistencyProof); err != nil {
+		consistencyProof,
+		secondHash); err != nil {
 		errorLabels := prometheus.Labels{"uri": f.logURI, "type": "failed-to-verify-proof"}
 		f.stats.sthInconsistencies.With(errorLabels).Inc()
 		f.logErrorf("failed to verify consistency proof %s : %s",
