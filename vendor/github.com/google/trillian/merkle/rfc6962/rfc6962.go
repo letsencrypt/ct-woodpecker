@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,14 +18,7 @@ package rfc6962
 import (
 	"crypto"
 	_ "crypto/sha256" // SHA256 is the default algorithm.
-
-	"github.com/google/trillian"
-	"github.com/google/trillian/merkle/hashers"
 )
-
-func init() {
-	hashers.RegisterLogHasher(trillian.HashStrategy_RFC6962_SHA256, New(crypto.SHA256))
-}
 
 // Domain separation prefixes
 const (
@@ -53,19 +46,23 @@ func (t *Hasher) EmptyRoot() []byte {
 
 // HashLeaf returns the Merkle tree leaf hash of the data passed in through leaf.
 // The data in leaf is prefixed by the LeafHashPrefix.
-func (t *Hasher) HashLeaf(leaf []byte) ([]byte, error) {
+func (t *Hasher) HashLeaf(leaf []byte) []byte {
 	h := t.New()
 	h.Write([]byte{RFC6962LeafHashPrefix})
 	h.Write(leaf)
-	return h.Sum(nil), nil
+	return h.Sum(nil)
 }
 
-// HashChildren returns the inner Merkle tree node hash of the the two child nodes l and r.
+// HashChildren returns the inner Merkle tree node hash of the two child nodes l and r.
 // The hashed structure is NodeHashPrefix||l||r.
 func (t *Hasher) HashChildren(l, r []byte) []byte {
 	h := t.New()
-	h.Write([]byte{RFC6962NodeHashPrefix})
-	h.Write(l)
-	h.Write(r)
+	b := append(append(append(
+		make([]byte, 0, 1+len(l)+len(r)),
+		RFC6962NodeHashPrefix),
+		l...),
+		r...)
+
+	h.Write(b)
 	return h.Sum(nil)
 }

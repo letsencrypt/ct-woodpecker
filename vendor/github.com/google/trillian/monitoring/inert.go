@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,6 +48,12 @@ func (imf InertMetricFactory) NewHistogram(name, help string, labelNames ...stri
 		counts:     make(map[string]uint64),
 		sums:       make(map[string]float64),
 	}
+}
+
+// NewHistogramWithBuckets creates a new inert Histogram with supplied buckets.
+// The buckets are not actually used.
+func (imf InertMetricFactory) NewHistogramWithBuckets(name, help string, _ []float64, labelNames ...string) Histogram {
+	return imf.NewHistogram(name, help, labelNames...)
 }
 
 // InertFloat is an internal-only implementation of both the Counter and Gauge interfaces.

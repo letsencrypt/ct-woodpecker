@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,22 +18,16 @@ package trees
 
 import (
 	"context"
-	"crypto"
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/trillian"
-	"github.com/google/trillian/crypto/keys"
-	"github.com/google/trillian/crypto/sigpb"
+	"github.com/google/trillian/monitoring"
 	"github.com/google/trillian/storage"
-	"go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	tcrypto "github.com/google/trillian/crypto"
 )
 
-const traceSpanRoot = "github.com/google/trillian/trees"
+const traceSpanRoot = "/trillian/trees"
 
 type treeKey struct{}
 
@@ -59,7 +53,6 @@ var rules = map[OpType]accessRule{
 		},
 		okTypes: map[trillian.TreeType]bool{
 			trillian.TreeType_LOG:            true,
-			trillian.TreeType_MAP:            true,
 			trillian.TreeType_PREORDERED_LOG: true,
 		},
 	},
@@ -74,7 +67,6 @@ var rules = map[OpType]accessRule{
 		},
 		okTypes: map[trillian.TreeType]bool{
 			trillian.TreeType_LOG:            true,
-			trillian.TreeType_MAP:            true,
 			trillian.TreeType_PREORDERED_LOG: true,
 		},
 	},
@@ -102,14 +94,6 @@ var rules = map[OpType]accessRule{
 		},
 		rejectCodes: map[trillian.TreeState]codes.Code{
 			trillian.TreeState_FROZEN: codes.PermissionDenied,
-		},
-	},
-	UpdateMap: {
-		okStates: map[trillian.TreeState]bool{
-			trillian.TreeState_ACTIVE: true,
-		},
-		okTypes: map[trillian.TreeType]bool{
-			trillian.TreeType_MAP: true,
 		},
 	},
 }
@@ -156,15 +140,21 @@ func validate(o GetOpts, tree *trillian.Tree) error {
 // The tree will be validated according to GetOpts before returned. Tree state is also considered
 // (for example, deleted tree will return NotFound errors).
 func GetTree(ctx context.Context, s storage.AdminStorage, treeID int64, opts GetOpts) (*trillian.Tree, error) {
-	ctx, span := spanFor(ctx, "GetTree")
-	defer span.End()
+	ctx, spanEnd := spanFor(ctx, "GetTree")
+	defer spanEnd()
 	tree, ok := FromContext(ctx)
-	if !ok || tree.TreeId != treeID {
+	if !ok {
 		var err error
 		tree, err = storage.GetTree(ctx, s, treeID)
 		if err != nil {
 			return nil, err
 		}
+	}
+	if tree.TreeId != treeID {
+		// No operations should span multiple trees. If a tree is already in the context
+		// it had better be the one that we want. If the tree comes back from the DB with
+		// the wrong ID then this checks that too.
+		return nil, status.Errorf(codes.Internal, "got tree %v, want %v", tree.TreeId, treeID)
 	}
 
 	if err := validate(opts, tree); err != nil {
@@ -177,44 +167,6 @@ func GetTree(ctx context.Context, s storage.AdminStorage, treeID int64, opts Get
 	return tree, nil
 }
 
-// Hash returns the crypto.Hash configured by the tree.
-func Hash(tree *trillian.Tree) (crypto.Hash, error) {
-	switch tree.HashAlgorithm {
-	case sigpb.DigitallySigned_SHA256:
-		return crypto.SHA256, nil
-	}
-	// There's no nil-like value for crypto.Hash, something has to be returned.
-	return crypto.SHA256, fmt.Errorf("unexpected hash algorithm: %s", tree.HashAlgorithm)
-}
-
-// Signer returns a Trillian crypto.Signer configured by the tree.
-func Signer(ctx context.Context, tree *trillian.Tree) (*tcrypto.Signer, error) {
-	if tree.SignatureAlgorithm == sigpb.DigitallySigned_ANONYMOUS {
-		return nil, fmt.Errorf("signature algorithm not supported: %s", tree.SignatureAlgorithm)
-	}
-
-	hash, err := Hash(tree)
-	if err != nil {
-		return nil, err
-	}
-
-	var keyProto ptypes.DynamicAny
-	if err := ptypes.UnmarshalAny(tree.PrivateKey, &keyProto); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal tree.PrivateKey: %v", err)
-	}
-
-	signer, err := keys.NewSigner(ctx, keyProto.Message)
-	if err != nil {
-		return nil, err
-	}
-
-	if tcrypto.SignatureAlgorithm(signer.Public()) != tree.SignatureAlgorithm {
-		return nil, fmt.Errorf("%s signature not supported by signer of type %T", tree.SignatureAlgorithm, signer)
-	}
-
-	return tcrypto.NewSigner(tree.GetTreeId(), signer, hash), nil
-}
-
-func spanFor(ctx context.Context, name string) (context.Context, *trace.Span) {
-	return trace.StartSpan(ctx, fmt.Sprintf("%s.%s", traceSpanRoot, name))
+func spanFor(ctx context.Context, name string) (context.Context, func()) {
+	return monitoring.StartSpan(ctx, fmt.Sprintf("%s.%s", traceSpanRoot, name))
 }

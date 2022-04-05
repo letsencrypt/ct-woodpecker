@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,50 +15,24 @@
 package der
 
 import (
+	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
 
-	"github.com/google/trillian/crypto/keys"
 	"github.com/google/trillian/crypto/keyspb"
+	"golang.org/x/crypto/ed25519"
+	"google.golang.org/protobuf/proto"
 )
 
-// FromProto takes a PrivateKey protobuf message and returns the private key contained within.
-func FromProto(pb *keyspb.PrivateKey) (crypto.Signer, error) {
-	return UnmarshalPrivateKey(pb.GetDer())
-}
-
-// NewProtoFromSpec creates a new private key based on a key specification.
-// It returns a PrivateKey protobuf message that contains the private key.
-func NewProtoFromSpec(spec *keyspb.Specification) (*keyspb.PrivateKey, error) {
-	key, err := keys.NewFromSpec(spec)
-	if err != nil {
-		return nil, fmt.Errorf("der: error generating key: %v", err)
+// FromProto builds a crypto.Signer from a proto.Message, which must be of type PrivateKey.
+func FromProto(_ context.Context, pb proto.Message) (crypto.Signer, error) {
+	if pb, ok := pb.(*keyspb.PrivateKey); ok {
+		return UnmarshalPrivateKey(pb.GetDer())
 	}
-
-	der, err := MarshalPrivateKey(key)
-	if err != nil {
-		return nil, fmt.Errorf("der: error marshaling private key: %v", err)
-	}
-
-	return &keyspb.PrivateKey{Der: der}, nil
-}
-
-// FromPublicProto takes a PublicKey protobuf message and returns the public
-// key contained within.
-func FromPublicProto(pb *keyspb.PublicKey) (crypto.PublicKey, error) {
-	return UnmarshalPublicKey(pb.GetDer())
-}
-
-// ToPublicProto returns a keyspb.PublicKey that contains pubKey in DER encoding.
-func ToPublicProto(pubKey crypto.PublicKey) (*keyspb.PublicKey, error) {
-	keyDER, err := MarshalPublicKey(pubKey)
-	if err != nil {
-		return nil, err
-	}
-	return &keyspb.PublicKey{Der: keyDER}, nil
+	return nil, fmt.Errorf("der: got %T, want *keyspb.PrivateKey", pb)
 }
 
 // UnmarshalPrivateKey reads a DER-encoded private key.
@@ -74,6 +48,8 @@ func UnmarshalPrivateKey(keyDER []byte) (crypto.Signer, error) {
 		case *ecdsa.PrivateKey:
 			return key2, nil
 		case *rsa.PrivateKey:
+			return key2, nil
+		case ed25519.PrivateKey:
 			return key2, nil
 		}
 		return nil, fmt.Errorf("der: unsupported private key type: %T", key2)
@@ -114,6 +90,8 @@ func MarshalPrivateKey(key crypto.Signer) ([]byte, error) {
 		return x509.MarshalECPrivateKey(key)
 	case *rsa.PrivateKey:
 		return x509.MarshalPKCS1PrivateKey(key), nil
+	case ed25519.PrivateKey:
+		return x509.MarshalPKCS8PrivateKey(key)
 	}
 
 	return nil, fmt.Errorf("der: unsupported key type: %T", key)

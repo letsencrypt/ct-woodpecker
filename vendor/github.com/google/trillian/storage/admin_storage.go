@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,27 +23,21 @@ import (
 // ReadOnlyAdminTX is a transaction capable only of read operations in the
 // AdminStorage.
 type ReadOnlyAdminTX interface {
-	AdminReader
+	// GetTree returns the tree corresponding to treeID or an error.
+	GetTree(ctx context.Context, treeID int64) (*trillian.Tree, error)
 
-	// Commit applies the operations performed to the underlying storage, or
-	// returns an error.
-	// A commit must be performed before any reads from storage are
-	// considered consistent.
+	// ListTrees returns all trees in storage.
+	// Note that there's no authorization restriction on the trees returned,
+	// so it should be used with caution in production code.
+	ListTrees(ctx context.Context, includeDeleted bool) ([]*trillian.Tree, error)
+
+	// Commit applies the operations performed to the underlying storage. It must
+	// be called before any reads from storage are considered consistent.
 	Commit() error
 
-	// Rollback aborts any performed operations, or returns an error.
-	// See Close() for a way to automatically manage transactions.
-	Rollback() error
-
-	// IsClosed returns true if the transaction is closed.
-	// A transaction is closed when either Commit() or Rollback() are
-	// called.
-	IsClosed() bool
-
-	// Close rolls back the transaction if it's not yet closed.
-	// It's advisable to call "defer tx.Close()" after the creation of
-	// transaction to ensure that it's always rolled back if not explicitly
-	// committed.
+	// Close rolls back the transaction if it wasn't committed or closed
+	// previously. Resources are cleaned up regardless of the success, and the
+	// transaction should not be used after it.
 	Close() error
 }
 
@@ -72,22 +66,6 @@ type AdminStorage interface {
 	// CheckDatabaseAccessible checks whether we are able to connect to / open the
 	// underlying storage.
 	CheckDatabaseAccessible(ctx context.Context) error
-}
-
-// AdminReader provides a read-only interface for tree data.
-type AdminReader interface {
-	// GetTree returns the tree corresponding to treeID or an error.
-	GetTree(ctx context.Context, treeID int64) (*trillian.Tree, error)
-
-	// ListTreeIDs returns the IDs of all trees in storage.
-	// Note that there's no authorization restriction on the IDs returned,
-	// so it should be used with caution in production code.
-	ListTreeIDs(ctx context.Context, includeDeleted bool) ([]int64, error)
-
-	// ListTrees returns all trees in storage.
-	// Note that there's no authorization restriction on the trees returned,
-	// so it should be used with caution in production code.
-	ListTrees(ctx context.Context, includeDeleted bool) ([]*trillian.Tree, error)
 }
 
 // AdminWriter provides a write-only interface for tree data.
@@ -125,17 +103,4 @@ type AdminWriter interface {
 	// The tree must exist and currently be soft deleted, as per SoftDeletedTree, otherwise an error
 	// is returned.
 	UndeleteTree(ctx context.Context, treeID int64) (*trillian.Tree, error)
-}
-
-// RunInAdminSnapshot runs fn against a ReadOnlyAdminTX and commits if no error is returned.
-func RunInAdminSnapshot(ctx context.Context, admin AdminStorage, fn func(tx ReadOnlyAdminTX) error) error {
-	tx, err := admin.Snapshot(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Close()
-	if err := fn(tx); err != nil {
-		return err
-	}
-	return tx.Commit()
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,4 +15,4 @@
 // Package storage provides general interfaces to Trillian storage layers.
 package storage
 
-//go:generate mockgen -self_package github.com/google/trillian/storage -package storage -destination mock_storage.go -imports=trillian=github.com/google/trillian,storagepb=github.com/google/trillian/storage/storagepb github.com/google/trillian/storage AdminStorage,AdminTX,LogStorage,LogTreeTX,MapStorage,MapTreeTX,ReadOnlyAdminTX,ReadOnlyLogTX,ReadOnlyLogTreeTX,ReadOnlyMapTreeTX
+//go:generate mockgen -self_package github.com/google/trillian/storage -package storage -destination mock_storage.go -imports=trillian=github.com/google/trillian,storagepb=github.com/google/trillian/storage/storagepb github.com/google/trillian/storage AdminStorage,AdminTX,LogStorage,LogTreeTX,ReadOnlyAdminTX,ReadOnlyLogTreeTX

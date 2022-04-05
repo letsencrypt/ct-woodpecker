@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,9 @@ package cache
 
 //go:generate mockgen -self_package github.com/google/trillian/storage/cache -package cache -imports github.com/google/trillian/storage/storagepb -destination mock_node_storage.go github.com/google/trillian/storage/cache NodeStorage
 
-import (
-	"github.com/google/trillian/storage"
-	"github.com/google/trillian/storage/storagepb"
-)
+import "github.com/google/trillian/storage/storagepb"
 
 // NodeStorage provides an interface for storing and retrieving subtrees.
 type NodeStorage interface {
-	GetSubtree(n storage.NodeID) (*storagepb.SubtreeProto, error)
-	SetSubtrees(s []*storagepb.SubtreeProto) error
+	GetSubtree(prefix []byte) (*storagepb.SubtreeProto, error)
 }

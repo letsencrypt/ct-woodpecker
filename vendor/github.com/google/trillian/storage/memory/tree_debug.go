@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,13 +32,13 @@ func Dump(t *btree.BTree) {
 	})
 }
 
-// DumpSubtrees will traverse the the BTree and execute a callback on each subtree proto
+// DumpSubtrees will traverse the BTree and execute a callback on each subtree proto
 // that it contains. The traversal will be 'in order' according to the BTree keys, which
 // may not be useful at the application level.
 func DumpSubtrees(ls storage.LogStorage, treeID int64, callback func(string, *storagepb.SubtreeProto)) {
 	m := ls.(*memoryLogStorage)
 	tree := m.trees[treeID]
-	pi := subtreeKey(treeID, 0, storage.NewEmptyNodeID(64))
+	pi := subtreeKey(treeID, 0, []byte{})
 
 	tree.store.AscendGreaterOrEqual(pi, func(bi btree.Item) bool {
 		i := bi.(*kv)

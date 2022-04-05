@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,17 +15,12 @@
 package storage
 
 import (
-	"bytes"
 	"context"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/trillian"
-	"github.com/google/trillian/crypto/keys"
-	"github.com/google/trillian/crypto/keys/der"
-	"github.com/google/trillian/crypto/sigpb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // ValidateTreeForCreation returns nil if tree is valid for insertion, error
@@ -40,16 +35,6 @@ func ValidateTreeForCreation(ctx context.Context, tree *trillian.Tree) error {
 		return status.Errorf(codes.InvalidArgument, "invalid tree_state: %s", tree.TreeState)
 	case tree.TreeType == trillian.TreeType_UNKNOWN_TREE_TYPE:
 		return status.Errorf(codes.InvalidArgument, "invalid tree_type: %s", tree.TreeType)
-	case tree.HashStrategy == trillian.HashStrategy_UNKNOWN_HASH_STRATEGY:
-		return status.Errorf(codes.InvalidArgument, "invalid hash_strategy: %s", tree.HashStrategy)
-	case tree.HashAlgorithm == sigpb.DigitallySigned_NONE:
-		return status.Errorf(codes.InvalidArgument, "invalid hash_algorithm: %s", tree.HashAlgorithm)
-	case tree.SignatureAlgorithm == sigpb.DigitallySigned_ANONYMOUS:
-		return status.Errorf(codes.InvalidArgument, "invalid signature_algorithm: %s", tree.SignatureAlgorithm)
-	case tree.PrivateKey == nil:
-		return status.Error(codes.InvalidArgument, "a private_key is required")
-	case tree.PublicKey == nil:
-		return status.Error(codes.InvalidArgument, "a public_key is required")
 	case tree.Deleted:
 		return status.Errorf(codes.InvalidArgument, "invalid deleted: %v", tree.Deleted)
 	case tree.DeleteTime != nil:
@@ -95,18 +80,10 @@ func ValidateTreeForUpdate(ctx context.Context, storedTree, newTree *trillian.Tr
 		if err := validateTreeTypeUpdate(storedTree, newTree); err != nil {
 			return err
 		}
-	case storedTree.HashStrategy != newTree.HashStrategy:
-		return status.Error(codes.InvalidArgument, "readonly field changed: hash_strategy")
-	case storedTree.HashAlgorithm != newTree.HashAlgorithm:
-		return status.Error(codes.InvalidArgument, "readonly field changed: hash_algorithm")
-	case storedTree.SignatureAlgorithm != newTree.SignatureAlgorithm:
-		return status.Error(codes.InvalidArgument, "readonly field changed: signature_algorithm")
 	case !proto.Equal(storedTree.CreateTime, newTree.CreateTime):
 		return status.Error(codes.InvalidArgument, "readonly field changed: create_time")
 	case !proto.Equal(storedTree.UpdateTime, newTree.UpdateTime):
 		return status.Error(codes.InvalidArgument, "readonly field changed: update_time")
-	case !proto.Equal(storedTree.PublicKey, newTree.PublicKey):
-		return status.Error(codes.InvalidArgument, "readonly field changed: public_key")
 	case storedTree.Deleted != newTree.Deleted:
 		return status.Error(codes.InvalidArgument, "readonly field changed: deleted")
 	case !proto.Equal(storedTree.DeleteTime, newTree.DeleteTime):
@@ -119,37 +96,19 @@ func validateMutableTreeFields(ctx context.Context, tree *trillian.Tree) error {
 	if tree.TreeState == trillian.TreeState_UNKNOWN_TREE_STATE {
 		return status.Errorf(codes.InvalidArgument, "invalid tree_state: %v", tree.TreeState)
 	}
-	if duration, err := ptypes.Duration(tree.MaxRootDuration); err != nil {
-		return status.Errorf(codes.InvalidArgument, "max_root_duration malformed: %v", tree.MaxRootDuration)
-	} else if duration < 0 {
+	if err := tree.MaxRootDuration.CheckValid(); err != nil {
+		return status.Errorf(codes.InvalidArgument, "max_root_duration malformed: %v", err)
+	} else if duration := tree.MaxRootDuration.AsDuration(); duration < 0 {
 		return status.Errorf(codes.InvalidArgument, "max_root_duration negative: %v", tree.MaxRootDuration)
 	}
 
 	// Implementations may vary, so let's assume storage_settings is mutable.
 	// Other than checking that it's a valid Any there isn't much to do at this layer, though.
 	if tree.StorageSettings != nil {
-		var settings ptypes.DynamicAny
-		if err := ptypes.UnmarshalAny(tree.StorageSettings, &settings); err != nil {
+		_, err := tree.StorageSettings.UnmarshalNew()
+		if err != nil {
 			return status.Errorf(codes.InvalidArgument, "invalid storage_settings: %v", err)
 		}
-	}
-
-	var privateKeyProto ptypes.DynamicAny
-	if err := ptypes.UnmarshalAny(tree.PrivateKey, &privateKeyProto); err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid private_key: %v", err)
-	}
-
-	// Check that the private key can be obtained and matches the public key.
-	privateKey, err := keys.NewSigner(ctx, privateKeyProto.Message)
-	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid private_key: %v", err)
-	}
-	publicKeyDER, err := der.MarshalPublicKey(privateKey.Public())
-	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid private_key: %v", err)
-	}
-	if !bytes.Equal(publicKeyDER, tree.PublicKey.GetDer()) {
-		return status.Errorf(codes.InvalidArgument, "private_key and public_key are not a matching pair")
 	}
 
 	return nil

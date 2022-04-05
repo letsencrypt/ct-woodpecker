@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,6 +67,10 @@ type Spec struct {
 	// User identifies the user for specs of the User group.
 	// Not used for other specs.
 	User string
+
+	// Refundable indicates that the tokens acquired before the operation should be returned if
+	// the operation fails.
+	Refundable bool
 }
 
 // Name returns a textual representation of the Spec. Names are constant and may be relied upon to
@@ -103,10 +107,6 @@ type Manager interface {
 	// specs.
 	// Returns error if numTokens could not be acquired for all specs.
 	GetTokens(ctx context.Context, numTokens int, specs []Spec) error
-
-	// PeekTokens returns how many tokens are available for each spec, without acquiring any.
-	// Infinite quotas should return MaxTokens.
-	PeekTokens(ctx context.Context, specs []Spec) (map[Spec]int, error)
 
 	// PutTokens adds numTokens for all specs.
 	PutTokens(ctx context.Context, numTokens int, specs []Spec) error

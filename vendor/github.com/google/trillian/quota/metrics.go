@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,6 +59,10 @@ func (m *m) add(c monitoring.Counter, tokens int, specs []Spec, success bool) {
 		return
 	}
 	for _, spec := range specs {
+		if spec.Group == User {
+			// Don't populate per-user labels.
+			continue
+		}
 		c.Add(float64(tokens), spec.Name(), fmt.Sprint(success))
 	}
 }
