@@ -26,14 +26,17 @@ jobs:
     - name: Chmod db_password
       run: chmod 0600 test/config/db_password
 
-    - name: build
-      run: go build ./...
-
     - name: mysql
       run: docker-compose up -d mysql
 
     - name: test
       run: go test -mod=vendor -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
+
+    - name: build
+      run: go build ./...
+
+    - name: install
+      run: go install ./cmd/ct-woodpecker
 
     - name: ct-woodpecker
       run: ct-woodpecker -config ./test/config/ct-woodpecker.localdev.json &
