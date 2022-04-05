@@ -29,11 +29,11 @@ jobs:
     - name: build
       run: go build ./...
 
-    - name: test
-      run: go test -mod=vendor -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
-
     - name: mysql
       run: docker-compose up -d mysql
+
+    - name: test
+      run: go test -mod=vendor -race -covermode=atomic -coverprofile=coverage.out -tags=integration ./...
 
     - name: ct-woodpecker
       run: ct-woodpecker -config ./test/config/ct-woodpecker.localdev.json &
