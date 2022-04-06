@@ -23,6 +23,7 @@ import (
 	"github.com/google/trillian/log"
 	"github.com/google/trillian/merkle"
 	"github.com/google/trillian/merkle/hashers"
+	"github.com/google/trillian/merkle/rfc6962"
 	"github.com/google/trillian/monitoring"
 	"github.com/google/trillian/storage"
 	"github.com/google/trillian/storage/memory"
@@ -87,17 +88,18 @@ func makeTree(name string, _ *ecdsa.PrivateKey) (*testTree, error) {
 	// overwrite the tree with the one returned from CreateTree since it will populate a TreeId
 	tree, err := storage.CreateTree(context.Background(), adminStorage, tree)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating tree: %w", err)
 	}
 
 	tt := &testTree{
 		tree:       tree,
+		hasher:     rfc6962.DefaultHasher,
 		logStorage: logStorage,
 	}
 
 	// initialize the tree with an empty STH
 	if err := initSTH(tt); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initalizing STH: %w", err)
 	}
 
 	return tt, nil
@@ -106,13 +108,16 @@ func makeTree(name string, _ *ecdsa.PrivateKey) (*testTree, error) {
 // initSTH initializes a tree with an empty tree STH.
 func initSTH(tt *testTree) error {
 	emptyRootHash := sha256.Sum256(nil)
-	// init the new tree by signing a STH for the empty root
-	slr := types.LogRootV1{
-		TreeSize:       0,
-		RootHash:       emptyRootHash[:],
-		TimestampNanos: uint64(timeSource.Now().UnixNano()),
-	}
 
+	// init the new tree by signing a STH for the empty root
+	slr := types.LogRoot{
+		Version: tls.Enum(trillian.LogRootFormat_LOG_ROOT_FORMAT_V1),
+		V1: &types.LogRootV1{
+			TreeSize:       0,
+			RootHash:       emptyRootHash[:],
+			TimestampNanos: uint64(timeSource.Now().UnixNano()),
+		},
+	}
 	slrBytes, err := tls.Marshal(slr)
 	if err != nil {
 		return err
@@ -125,7 +130,7 @@ func initSTH(tt *testTree) error {
 		})
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("storing STH: %w", err)
 	}
 
 	return nil

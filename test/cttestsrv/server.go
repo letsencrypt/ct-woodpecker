@@ -126,7 +126,7 @@ func NewServer(p Personality, logger *log.Logger) (*IntegrationSrv, error) {
 
 	testLog, err := newLog(key, windowStart, windowEnd)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating log: %w", err)
 	}
 	is := &IntegrationSrv{
 		logger:          logger,
