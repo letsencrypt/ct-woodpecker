@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,21 +22,20 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/btree"
 	"github.com/google/trillian"
-	"github.com/google/trillian/storage"
 	"github.com/google/trillian/storage/cache"
 	"github.com/google/trillian/storage/storagepb"
+	stree "github.com/google/trillian/storage/tree"
+	"google.golang.org/protobuf/proto"
 )
 
 const degree = 8
 
-// unseqKey formats a key for use in a tree's BTree store.
-// The associated Item value will be the stubtreeProto with the given nodeID
-// prefix.
-func subtreeKey(treeID, rev int64, nodeID storage.NodeID) btree.Item {
-	return &kv{k: fmt.Sprintf("/%d/subtree/%s/%d", treeID, nodeID.String(), rev)}
+// subtreeKey formats a key for use in a tree's BTree store. The associated
+// Item value will be the SubtreeProto with the given prefix.
+func subtreeKey(treeID, rev int64, prefix []byte) btree.Item {
+	return &kv{k: fmt.Sprintf("/%d/subtree/%x/%d", treeID, prefix, rev)}
 }
 
 // tree stores all data for a given treeID
@@ -111,10 +110,10 @@ func (a kv) Less(b btree.Item) bool {
 }
 
 // newTree creates and initializes a tree struct.
-func newTree(t trillian.Tree) *tree {
+func newTree(t *trillian.Tree) *tree {
 	ret := &tree{
 		store: btree.New(degree),
-		meta:  &t,
+		meta:  proto.Clone(t).(*trillian.Tree),
 	}
 	k := unseqKey(t.TreeId)
 	k.(*kv).v = list.New()
@@ -127,10 +126,10 @@ func newTree(t trillian.Tree) *tree {
 	return ret
 }
 
-func (m *TreeStorage) beginTreeTX(ctx context.Context, treeID int64, hashSizeBytes int, cache cache.SubtreeCache, readonly bool) (treeTX, error) {
+func (m *TreeStorage) beginTreeTX(ctx context.Context, treeID int64, hashSizeBytes int, cache *cache.SubtreeCache, readonly bool) (treeTX, error) {
 	tree := m.getTree(treeID)
 	// Lock the tree for the duration of the TX.
-	// It will be unlocked by a call to Commit or Rollback.
+	// It will be unlocked by a call to Commit or Close.
 	var unlock func()
 	if readonly {
 		tree.RLock()
@@ -158,41 +157,22 @@ type treeTX struct {
 	tree          *tree
 	treeID        int64
 	hashSizeBytes int
-	subtreeCache  cache.SubtreeCache
+	subtreeCache  *cache.SubtreeCache
 	writeRevision int64
 	unlock        func()
 }
 
-func (t *treeTX) getSubtree(ctx context.Context, treeRevision int64, nodeID storage.NodeID) (*storagepb.SubtreeProto, error) {
-	s, err := t.getSubtrees(ctx, treeRevision, []storage.NodeID{nodeID})
-	if err != nil {
-		return nil, err
-	}
-	switch len(s) {
-	case 0:
-		return nil, nil
-	case 1:
-		return s[0], nil
-	default:
-		return nil, fmt.Errorf("got %d subtrees, but expected 1", len(s))
-	}
-}
-
-func (t *treeTX) getSubtrees(ctx context.Context, treeRevision int64, nodeIDs []storage.NodeID) ([]*storagepb.SubtreeProto, error) {
-	if len(nodeIDs) == 0 {
+func (t *treeTX) getSubtrees(ctx context.Context, treeRevision int64, ids [][]byte) ([]*storagepb.SubtreeProto, error) {
+	if len(ids) == 0 {
 		return nil, nil
 	}
 
-	ret := make([]*storagepb.SubtreeProto, 0, len(nodeIDs))
+	ret := make([]*storagepb.SubtreeProto, 0, len(ids))
 
-	for _, nodeID := range nodeIDs {
-		if nodeID.PrefixLenBits%8 != 0 {
-			return nil, fmt.Errorf("invalid subtree ID - not multiple of 8: %d", nodeID.PrefixLenBits)
-		}
-
+	for _, id := range ids {
 		// Look for a nodeID at or below treeRevision:
 		for r := treeRevision; r >= 0; r-- {
-			s := t.tx.Get(subtreeKey(t.treeID, r, nodeID))
+			s := t.tx.Get(subtreeKey(t.treeID, r, id))
 			if s == nil {
 				continue
 			}
@@ -220,7 +200,7 @@ func (t *treeTX) storeSubtrees(ctx context.Context, subtrees []*storagepb.Subtre
 		if s.Prefix == nil {
 			panic(fmt.Errorf("nil prefix on %v", s))
 		}
-		k := subtreeKey(t.treeID, t.writeRevision, storage.NewNodeIDFromHash(s.Prefix))
+		k := subtreeKey(t.treeID, t.writeRevision, s.Prefix)
 		k.(*kv).v = s
 		t.tx.ReplaceOrInsert(k)
 	}
@@ -229,36 +209,26 @@ func (t *treeTX) storeSubtrees(ctx context.Context, subtrees []*storagepb.Subtre
 
 // getSubtreesAtRev returns a GetSubtreesFunc which reads at the passed in rev.
 func (t *treeTX) getSubtreesAtRev(ctx context.Context, rev int64) cache.GetSubtreesFunc {
-	return func(ids []storage.NodeID) ([]*storagepb.SubtreeProto, error) {
+	return func(ids [][]byte) ([]*storagepb.SubtreeProto, error) {
 		return t.getSubtrees(ctx, rev, ids)
 	}
 }
 
-// GetMerkleNodes returns the requests nodes at (or below) the passed in treeRevision.
-func (t *treeTX) GetMerkleNodes(ctx context.Context, treeRevision int64, nodeIDs []storage.NodeID) ([]storage.Node, error) {
-	return t.subtreeCache.GetNodes(nodeIDs, t.getSubtreesAtRev(ctx, treeRevision))
+func (t *treeTX) SetMerkleNodes(ctx context.Context, nodes []stree.Node) error {
+	rev := t.writeRevision - 1
+	return t.subtreeCache.SetNodes(nodes, t.getSubtreesAtRev(ctx, rev))
 }
 
-func (t *treeTX) SetMerkleNodes(ctx context.Context, nodes []storage.Node) error {
-	for _, n := range nodes {
-		err := t.subtreeCache.SetNodeHash(n.NodeID, n.Hash,
-			func(nID storage.NodeID) (*storagepb.SubtreeProto, error) {
-				return t.getSubtree(ctx, t.writeRevision, nID)
-			})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (t *treeTX) Commit() error {
+func (t *treeTX) Commit(ctx context.Context) error {
 	defer t.unlock()
 
 	if t.writeRevision > -1 {
-		if err := t.subtreeCache.Flush(func(st []*storagepb.SubtreeProto) error {
-			return t.storeSubtrees(context.TODO(), st)
-		}); err != nil {
+		tiles, err := t.subtreeCache.UpdatedTiles()
+		if err != nil {
+			glog.Warningf("SubtreeCache updated tiles error: %v", err)
+			return err
+		}
+		if err := t.storeSubtrees(ctx, tiles); err != nil {
 			glog.Warningf("TX commit flush error: %v", err)
 			return err
 		}
@@ -269,24 +239,11 @@ func (t *treeTX) Commit() error {
 	return nil
 }
 
-func (t *treeTX) Rollback() error {
+func (t *treeTX) Close() error {
+	if t.closed {
+		return nil
+	}
 	defer t.unlock()
-
 	t.closed = true
 	return nil
-}
-
-func (t *treeTX) Close() error {
-	if !t.closed {
-		err := t.Rollback()
-		if err != nil {
-			glog.Warningf("Rollback error on Close(): %v", err)
-		}
-		return err
-	}
-	return nil
-}
-
-func (t *treeTX) IsOpen() bool {
-	return !t.closed
 }

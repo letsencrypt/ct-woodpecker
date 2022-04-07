@@ -2,22 +2,625 @@
 
 ## HEAD
 
-Not yet released; provisionally v2.0.0 (may change).
+## v1.4.0
 
-### Storage API change
+* Recommended go version for development: 1.17
+  * This is the version used by the cloudbuild presubmits. Using a
+    different version can lead to presubmits failing due to unexpected
+    diffs.
+* GCP terraform script updated. GKE 1.19 and updated CPU type to E2
+
+### Dependency updates
+Many dep updates, including:
+ * Upgraded to etcd v3 in order to allow grpc to be upgraded (#2195)
+   * etcd was `v0.5.0-alpha.5`, now `v3.5.0`
+ * grpc upgraded from `v1.29.1` to `v1.40.0`
+ * certificate-transparency-go from `v1.0.21` to
+   `v1.1.2-0.20210512142713-bed466244fa6`
+ * protobuf upgraded from `v1` to `v2`
+ * MySQL driver from `1.5.0` to `1.6.0`
+
+### Cleanup
+ * **Removed signatures from LogRoot and EntryTimestamps returned by RPCs** (reflecting that
+   there should not be a trust boundary between Trillian and the personality.)
+ * Removed the deprecated crypto.NewSHA256Signer function.
+ * Finish removing the `LogMetadata.GetUnsequencedCounts()` method.
+ * Removed the following APIs:
+   - `TrillianLog.GetLeavesByHash`
+   - `TrillianLog.GetLeavesByIndex`
+   - `TrillianLog.QueueLeaves`
+ * Removed the incomplete Postgres storage backend (#1298).
+ * Deprecated `LogRootV1.Revision` field.
+ * Moved `rfc6962` hasher one directory up to eliminate empty leftover package.
+ * Removed unused `log_client` tool.
+ * Various tidyups and improvements to merke & proof generation code.
+ * Remove some remnants of experimental map.
+
+### Storage refactoring
+ * `NodeReader.GetMerkleNodes` does not accept revisions anymore. The
+   implementations must use the transaction's `ReadRevision` instead.
+ * `TreeStorage` migrated to using `compact.NodeID` type suitable for logs.
+ * Removed the tree storage `ReadRevision` and `WriteRevision` methods.
+   Revisions are now an implementation detail of the current storages. The
+   change allows log implementations which don't need revisions.
+ * Removed `Rollback` methods from storage interfaces, as `Close` is enough to
+   cover the use-case.
+ * Removed the unused `IsOpen` and `IsClosed` methods from transaction
+   interfaces.
+ * Removed the `ReadOnlyLogTX` interface, and put its only used
+   `GetActiveLogIDs` method to `LogStorage`.
+ * Inlined the `LogMetadata` interface to `ReadOnlyLogStorage`.
+ * Inlined the `TreeStorage` interfaces to `LogStorage`.
+ * Removed the need for the storage layer to return ephemeral node hashes. The
+   application layer always requests for complete subtree nodes comprising the
+   compact ranges corresponding to the requests.
+ * Removed the single-tile callback from `SubtreeCache`, it uses only
+   `GetSubtreesFunc` now.
+ * Removed `SetSubtreesFunc` callback from `SubtreeCache`. The tiles should be
+   written by the caller now, i.e. the caller must invoke the callback.
+
+## v1.3.13
+[Published 2021-02-16](https://github.com/google/trillian/releases/tag/v1.3.13)
+
+### Cleanup
+ * Removed the experimental map API.
+
+## v1.3.12
+[Published 2021-02-16](https://github.com/google/trillian/releases/tag/v1.3.12)
+
+### Misc improvements
+
+ * Removed unused `PeekTokens` method from the `quota.Manager` interface.
+ * Ensure goroutines never block in the subtree cache (#2272).
+ * Breaking unnecessary dependencies for Trillian clients:
+   * Moved verifiers from `merkle` into `merkle/{log,map}verifier`sub-pacakges,
+     reducing the amount of extra baggage inadvertently pulled in by clients.
+  * Concrete hashers have been moved into subpackages, separating them from their
+    registration code, allowing clients to directly pull just the hasher they're
+    interested in and avoid the Trillian/hasher registry+protobuf deps.
+ * Moved some packages intended for internal-only use into `internal` packages:
+   * InMemoryMerkleTree (indended to only be used by Trillian tests)
+ * Removed wrapper for etcd client (#2288).
+ * Moved `--quota_system` and `--storage_system` flags to `main.go` so that they
+   are initialised properly. It might break depending builds relying on these
+   flags. Suggested fix: add the flags to `main.go`.
+ * Made signer tolerate mastership election failures [#1150].
+ * `testdb` no longer accepts the `--test_mysql_uri` flag, and instead honours the
+   `TEST_MYSQL_URI` ENV var. This makes it easier to blanket configure tests to use a
+   specific test DB instance.
+ * Removed experimental Skylog folder (#2297).
+ * Fixed a race condition in the operation manager that should only affect tests
+   (#2302).
+ * Run gofumpt formatter on the whole repository (#2315).
+ * Refactor signer operation loop (#2294).
+
+### Upgrades
+ * Dockerfiles are now based on Go 1.13 image.
+ * The etcd is now pinned to v3.4.12.
+ * The golangci-lint suite is now at v1.36.0.
+ * CI/CD has migrated from Travis to Google Cloud Build.
+ * prometheus from 1.7.1 to 1.9.0 (#2239, #2270).
+ * go-cmp from 0.5.2 to 0.5.4 (#2262).
+ * apache/beam from 2.26.0+incompatible to 2.27.0+incompatible (#2273).
+ * lib/pq from 1.8.0 to 1.9.0 (#2264).
+ * go-redis from 6.15.8+incompatible to 6.15.9+incompatible (#2215).
+
+
+### Process
+ * Recognise that we do not follow strict semantic versioning practices.
+
+## v1.3.11
+[Published 2020-10-06](https://github.com/google/trillian/releases/tag/v1.3.11)
+
+### Documentation
+
+Added docs which describe the Claimant Model of transparency, a useful
+framework for reasoning about the design and architecture of transparent
+systems.
+
+### Misc improvements
+
+ * Fixed int to string conversion warnings for golang 1.15
+ * Metric improvements for fetched leaf counts
+ * Move tools.go into its own directory to help with dependencies
+
+### Dependency updates
+ * go-grpc-middleware from 1.2.0 to 1.2.2 (#2219, #2229)
+ * stackdriver from 0.13.2 to 0.13.4 (#2220, #2223)
+ * Google api from 0.28.0 to 0.29.0 (#2193)
+
+
+## v1.3.10
+[Published 2020-07-02](https://github.com/google/trillian/releases/tag/v1.3.10)
+
+### Storage
+
+The StorageProvider type and helpers have been moved from the server package to
+storage. Aliases for the old types/functions are created for backward
+compatibility, but the new code should not use them as we will remove them with
+the next major version bump. The individual storage providers have been moved to
+the corresponding packages, and are now required to be imported explicitly by
+the main file in order to be registered. We are including only MySQL and
+cloudspanner providers by default, since these are the ones that we support.
+
+The cloudspanner storage is supported for logs only, while the Map storage API
+is being polished and decoupled from the log storage API. We may return the
+support when the new API is tested.
+
+Support for storage of Ed25519 signatures has been added to the mysql and
+postgres storage drivers (only applicable in new installations) and bugs
+preventing correct usage of that algorithm have been fixed.
+
+#### Storage TX Interfaces
+- `QueueLeaves` has been removed from the `LogTreeTX` interface because
+  `QueueLeaves` is not transactional.  All callers use the
+  `QueueLeaves` function in the `LogStorage` interface.
+- `AddSequencedLeaves` has been removed from the `LogTreeTX`.
+
+
+### Log Changes
+
+#### Monitoring & Metrics
+
+The `queued_leaves` metric is removed, and replaced by `added_leaves` which
+covers both `QueueLeaves` and `AddSequencedLeaves`, and is labeled by log ID.
+
+#### MySQL Dequeueing Change #2159
+mysql will now remove leaves from the queue inside of `UpdateLeaves` rather
+than directly inside of `Dequeue`.
+This change brings the behavior of the mysql storage implementation into line
+with the spanner implementation and makes consistent testing possible.
+
+
+### Map Changes
+
+**The verifiable map is still experimental.**
+APIs, such as SetLeaves, have been deprecated and will be deleted in the near
+future. The semantics of WriteLeaves have become stricter: now it always
+requires the caller to specify the write revision. These changes will not
+affect the Trillian module semantic version due to the experimental status of
+the Map.
+
+Map API has been extended with Layout, GetTiles and SetTiles calls which allow
+for more direct processing of sparse Merkle tree tiles in the application layer.
+Map storage implementations are simpler, and no longer use the SubtreeCache.
+
+The map client has been updated so that GetAndVerifyMapLeaves and
+GetAndVerifyMapLeavesByRevision return the MapRoot for the revision at which the
+leaves were fetched. Without this callers of GetAndVerifyMapLeaves in particular
+were unable to reason about which map revision they were seeing. The
+SetAndVerifyMapLeaves method was deleted.
+
+
+
+## v1.3.9
+[Published 2020-06-22](https://github.com/google/trillian/releases/tag/v1.3.9)
+
+### Selected Dependency Updates
+* etcd from v3.3.18 to 3.4.7 (#2090)
+* etcd-operator from v0.9.1 to v0.9.4
+* upgraded protoc version to latest (#2088)
+* github.com/golang/protobuf to v1.4.1 (#2111)
+* google.golang.org/grpc from v1.26 to 1.29.1 (#2108)
+
+
+## v1.3.8
+[Published 2020-05-12](https://github.com/google/trillian/releases/tag/v1.3.8)
+
+### HTTP APIs
+
+The HTTP/JSON APIs have been removed in favor of a pure gRPC intereface.
+[grpcurl](https://github.com/fullstorydev/grpcurl) is the recommended way
+of interacting with the gRPC API from the commandline.
+
+
+## v1.3.7
+[Published 2020-05-12](https://github.com/google/trillian/releases/tag/v1.3.7)
+
+### Server Binaries
+
+The `trillian_log_server`, `trillian_log_signer` and `trillian_map_server`
+binaries have moved from `github.com/google/trillian/server/` to
+`github.com/google/trillian/cmd`. A subset of the `server` package has also
+moved and has been split into `cmd/internal/serverutil`, `quota/etcd` and
+`quota/mysqlqm` packages.
+
+
+## v1.3.6
+[Published 2020-05-12](https://github.com/google/trillian/releases/tag/v1.3.6)
+
+### Deployments
+
+The Kubernetes configs will now provision 5 nodes for Trillian's Etcd cluster,
+instead of 3 nodes.
+[This makes the Etcd cluster more resilient](https://etcd.io/docs/v3.2.17/faq/#what-is-failure-tolerance)
+to nodes becoming temporarily unavailable, such as during updates (it can now
+tolerate 2 nodes being unavailable, instead of just 1).
+
+### Monitoring & Metrics
+
+A count of the total number of individual leaves the logserver attempts to
+fetch via the GetEntries.* API methods has been added.
+
+
+## v1.3.5
+[Published 2020-05-12](https://github.com/google/trillian/releases/tag/v1.3.5)
+
+### Log Changes
+
+#### Potential sequencer hang fixed
+A potential deadlock condition in the log sequencer when the process is
+attempting to exit has been addressed.
+
+### Quota
+
+#### New Features
+
+An experimental Redis-based `quota.Manager` implementation has been added.
+
+#### Behaviour Changes
+
+Quota used to be refunded for all failed requests. For uses of quota that were
+to protect against abuse or fair utilization, this could allow infinite QPS in
+situations that really should have the requests throttled. Refunds are now only
+performed for tokens in `Global` buckets, which prevents tokens being leaked if
+duplicate leaves are queued.
+
+### Tools
+
+The `licenses` tool has been moved from "scripts/licenses" to [a dedicated
+repository](https://github.com/google/go-licenses).
+
+### Bazel Changes
+
+Python support is disabled unless we hear that the community cares about this
+being re-enabled. This was broken by a downstream change and without a signal
+from the Trillian community to say this is needed, the pragmatic action is to
+not spend time investigating this issue.
+
+
+## v1.3.4 - Invalid release, do not use.
+[Published 2020-05-12](https://github.com/google/trillian/releases/tag/v1.3.4)
+
+
+## v1.3.3 - Module fixes
+
+Published 2019-10-31 17:30:00 +0000 UTC
+
+Patch release to address Go Module issue. Removes `replace` directives in our
+go.mod file now that our dependencies have fixed their invalid pseudo-version
+issues.
+
+## v1.3.2 - Module fixes
+
+Published 2019-09-05 17:30:00 +0000 UTC
+
+Patch release to address Go Module issue. Some dependencies use invalid pseudo-
+versions in their go.mod files that Go 1.13 rejects. We've added `replace`
+directives to our go.mod file to fix these invalid pseudo-versions.
+
+## v1.3.1 - Module and Bazel fixes
+
+Published 2019-08-16 15:00:00 +0000 UTC
+
+Patch release primarily to address Go Module issue. v1.3.0 declared a dependency
+on github.com/russross/blackfriday/v2 v2.0.1+incompatible which made downstream
+dependencies suffer.
+
+## v1.3.0
+
+Published 2019-07-17 15:00:00 +0000 UTC
+
+### Storage APIs GetSignedLogRoot / SetSignedLogRoot now take pointers
+
+This at the storage layer and does not affect the log server API.
+This is part of work to fix proto buffer usages where they are passed
+by value or compared by generic code like `reflect.DeepEquals()`. Passing
+them by value creates shallow copies that can share internal state. As the
+generated structs contain additional exported `XXX_` fields generic
+comparisons using all fields can produce incorrect results.
+
+### Storage Commit takes context.Context
+
+To support passing a context down to `NodeStorage.SetLeaves`, and remove various `context.TODO()`s,
+the following functions have been modified to accept a `context.Context` parameter:
+
+- `storage/cache.NodeStorage.SetLeaves`
+- `storage/cache.SetSubtreesFunc`
+- `storage/cache.SubtreeCache.Flush`
+- `storage.ReadonlyLogTX.Commit`
+
+### Go Module Support
+
+Go Module support has been enabled. Please use GO111MODULE=on to build Trillian.
+Updating dependencies no longer requires updating the vendor directory.
+
+### TrillianMapWrite API
+New API service for writing to the Trillian Map. This allows APIs such as
+GetLeavesByRevisionNoProof to be removed from the read API, and these methods to
+be tuned & provisioned differently for read vs write performance.
+
+### GetLeavesByRevisionNoProof API
+Allow map clients to forgo fetching inclusion proofs.
+This dramatically speeds things up for clients that don't need verifiability.
+This situation occurs in some situation where a Trillian personality is
+interacting directly with the Trillian Map.
+
+### GetMapLeafByRevision API
+New GetMapLeafByRevision API for fetching a single map leaf. This allows there
+to be a separate API end point for fetching a single leaf vs. the batch
+GetMapLeavesByRevision API which is much slower when many leaves are requested.
+This supports separate monitoring and alerting for different traffic patterns.
+
+### Add Profiling Flags to Binaries
+
+The `trillian_log_server`, `trillian_log_signer` and `trillian_map_server`
+binaries now have CPU and heap profiling flags. Profiling is off by default.
+For more details see the
+[Go Blog](https://blog.golang.org/profiling-go-programs).
+### Map performance tweaks
+
+The map mode has had some performance tweaks added:
+* A workaround for locking issues which affect the map when it's used in
+  single-transaction mode.
+
+### Introduce BatchInclusionProof function
+
+Added a batch version of the Merkle Tree InclusionProof function.
+
+Updated the map RPC for getLeaves to use the new batch function to improve
+efficiency.
+
+### Google Cloud Spanner support
+
+Google Cloud Spanner is now a supported storage backend for maps.
+
+The admin API calls to list trees backed by Cloud Spanner trees are fixed.
+
+### RPC Server Transaction Leaks Fixed
+
+There were some cases where the Log RPC server could leak storage transactions
+in error situations. These have now been fixed. If you have a custom storage
+implementation review the fixes made to the MySQL Log storage to see if they
+need to be applied to your code (`storage/mysql/log_storage.go`). The Map
+server had similar issues but these were fixed without requiring changes to
+storage code.
+
+### GetLatestSignedLogRoot With Consistency Proof
+
+`GetLatestSignedLogRoot` in the LogServer will return a consistency proof if
+`first_tree_size` > 0. This reduces the number of RPC calls from logClient from
+2 to 1 in `client.getAndVerifyLatestRoot`.
+
+### Testing
+
+Support has been added for testing against a locally running mysql docker image,
+in addition to a locally running mysql instance.
+
+### Deprecated Fields Removed From SignedLogRoot Proto
+
+*Important Note*: For use in Certificate Transparency this version of the
+logserver binary won't work properly with an older CTFE. Make sure to update the
+CTFE servers to a current version (built from a git checkout after March 20th
+2019) before deploying logservers that include this change or deploy them
+together with this release. Failure to do this can result in 5XX errors being
+returned to clients when the old handler code tries to access fields in
+responses that no longer exist.
+
+All the fields marked as deprecated in this proto have been removed. All the
+same fields are available via the TLS marshalled log root in the proto. Updating
+affected code is straightforward.
+
+Normally, clients will want to verify that the signed root is correctly signed.
+This is the preferred way to interact with the root data.
+
+There is a utility function provided that will verify the signature and unpack
+the TLS data. It works well in conjunction with a `LogVerifier`. The public key
+of the server is required.
+
+```go
+verifier := client.NewLogVerifier(rfc6962.DefaultHasher, pk, crypto.SHA256)
+root, err := crypto.VerifySignedLogRoot(verifier.PubKey, verifier.SigHash, resp.SignedLogRoot)
+if err != nil {
+  // Signature verified and unmarshalled correctly. The struct may now
+  // be used.
+  if root.TreeSize > 0 {
+    // Non empty tree.
+  }
+}
+```
+
+### MySQL changes
+
+#### Configurable number of connections for MySQL
+
+Two new flags have been added that limit connections to MySQL database servers:
+
+-   `--mysql_max_conns` - limits the total number of database connections
+-   `--mysql_max_idle_conns` - limits the number of idle database connections
+
+By default, there is no maximum number of database connections. However, the
+database server will likely impose limits on the number of connections. The
+default limit on idle connections is controlled by
+[Go's `sql` package](https://golang.org/pkg/database/sql/#DB.SetMaxIdleConns).
+
+#### Enfored no concurrent use of MySQL tx
+
+Concurrently using a single MySQL transaction can cause the driver to error
+out, so we now attempt to prevent this from happening.
+
+### Removal of length limits for a tree's `display_name` and `description`
+
+Previously, these were restricted to 20 bytes and 200 bytes respectively. These
+limits have been removed. However, the underlying storage implementation may
+still impose its own limitations.
+
+### Server validation of leaf hashes
+
+The log server now checks that leaf hashes are the correct length and returns
+an InvalidArgument error if they are not. Previously, GetLeavesByHash would
+simply not return any matching leaves for invalid hashes, and
+GetInclusionProofByHash would return a NotFound error.
+
+### Map client
+
+A [MapClient](client/map_client.go) has been added to simplify interacting with
+the map server.
+
+### Database Schema
+
+This version includes a change to the MySQL and Postgres database schemas to add
+an index on the `SequencedLeafData` table. This improves performance for
+inclusion proof queries.
+
+### Deployments
+
+The Trillian Docker images now accept GOFLAGS and GO111MODULE arguments
+and set them as environment variables inside the Docker container.
+
+The [db\_server Docker image](examples/deployment/docker/db_server/Dockerfile)
+is now based on
+[the MySQL 5.7 image from the Google Cloud Marketplace](https://console.cloud.google.com/marketplace/details/google/mysql5),
+rather than the [official MySQL 5.7 image](https://hub.docker.com/_/mysql).
+This Dockerfile supercedes Dockerfile.db, which has been removed.
+
+There is now a [mysql.cnf file](examples/deployment/docker/db_server/mysql.cnf)
+alongside the Dockerfile that makes it easy to build the image with a custom
+configuration, e.g. to allow MySQL to use more memory.
+
+The `trillian-log-service` and `trillian-log-signer` Kubernetes services will
+now have load balancers configured for them that expose those services outside
+of the Kubernetes cluster. This makes it easier to access their APIs. When
+deployed on Google Cloud, these will be
+[Internal Load Balancers](https://cloud.google.com/kubernetes-engine/docs/how-to/internal-load-balancing).
+Note that this change **cannot be applied to an existing deployment**; delete
+the existing Kubernetes services and redeploy them, otherwise you'll see an
+error similar to `The Service "trillian-log-service" is invalid: spec.clusterIP:
+Invalid value: "": field is immutable`.
+
+A working [Docker Compose](https://docs.docker.com/compose/) configuration is
+now available and can be used to bring up a local Trillian deployment for
+testing and experimental purposes:
+
+```shell
+docker-compose -f examples/deployment/docker-compose.yml up
+```
+
+Docker Compose v3.1 or higher is required.
+
+The Terraform, Kubernetes and Docker configuration files, as well as various
+scripts, all now use the same, consistently-named environment variables for
+MySQL-related data (e.g. `MYSQL_DATABASE`). The variable names are based on
+those for the
+[MySQL Docker image](https://hub.docker.com/_/mysql#environment-variables).
+
+Docker images have been upgraded from Go 1.9 to 1.11. They now use ["Distroless"
+base images](https://github.com/GoogleContainerTools/distroless).
+
+### Dropped metrics
+
+Quota metrics with specs of the form `users/<user>/read` and
+`users/<user>/write` are no longer exported by the Trillian binaries (as they
+lead to excessive storage requirements for Trillian metrics).
+
+### Resilience improvements in `log_signer`
+
+#### Add timeout to sequencing loop
+
+Added a timeout to the context in the sequencing loop, with a default of 60s.
+
+#### Fix Operation Loop Hang
+
+Resolved a bug that would hide errors and cause the `OperationLoop` to hang
+until process exit if any error occurred.
+
+### Linting toolchain migration
+
+gometalinter has been replaced with golangci-lint for improved performance and
+Go module support.
+
+### Compact Merkle tree data structures
+
+`CompactMerkleTree` has been removed from `github.com/google/trillian/merkle`,
+and a new package `github.com/google/trillian/merkle/compact` was introduced.  A
+new powerful data structure named "compact range" has been added to that
+package, and is now used throughout the repository instead of the compact tree.
+It is a generalization of the previous structure, as it allows manipulating
+arbitrary sub-ranges of leaves rather than only prefixes.
+
+### Storage API changes
 
 The internal storage API is modified so that the ReadOnlyTreeTX.ReadRevision and
 TreeWriter.WriteRevision entrypoints take a context.Context parameter and return
 an optional error.
 
+The `SubtreeCache.GetNodeHash()` method is no longer exported.
+
+The memory storage provider has been refactored to make it more consistent with
+the other storage providers.
+
+The `LogMetadata.GetUnsequencedCounts()` method has been removed.
+
+`NodeReader.GetMerkleNodes` now must return `Node` objects in the same order as
+node IDs requested. Storage implementations known to us already adhere to this
+requirement.
+
 ### Maphammer improvements
 
 The maphammer test tool for the experimental Trillian Map has been enhanced.
+
+### Default values changed for some signer flags
+
+The following flags for the signer have new default values:
+
+-   `--sequencer_interval`: changed from 10 seconds to 100 milliseconds
+-   `--batch_size`: changed from 50 to 1000
+
+These changes improve the signer's throughput and latency under typical
+conditions.
+
+### Master election refactoring
+
+The `--resign_odds` flag in `logsigner` is removed, in favor of a more generic
+`--master_hold_jitter` flag. Operators using this flag are advised to set the
+jitter to `master_check_interval * resign_odds * 2` to achieve similar behavior.
+
+The `--master_check_interval` flag is removed from `logsigner`.
+
+`logsigner` switched to using a new master election interface contained in
+`util/election2` package. The interfaces in `util/election` are removed.
+
+### `CONIKS_SHA256` hash strategy added
+
+Support has been added for a CONIKS sparse tree hasher with SHA256 as the hash
+algorithm. Set a tree's `hash_strategy` to `CONIKS_SHA256` to use it.
+
+### Performance
+
+The performance of `SetLeaves` requests on the Map has been slightly improved.
+The performance of `GetConsistencyProof` requests has been improved when using
+MySQL.
+
+### Logging
+
+Some warning-level logging has been removed from the sequencer in favour of
+returning the same information via the returned error. The caller may still
+choose to log this information. This allows storage implementations that retry
+transactions to suppress warnings when a transaction initially fails but a retry
+succeeds.
+
+Some incorrectly-formatted log messages have been fixed.
+
+### Documentation
+
+[API documentation in Markdown format](docs/api.md) is now available.
 
 ### Other
 
 The `TimeSource` type (and other time utils) moved to a separate `util/clock`
 package, extended with a new `Timer` interface that allows mocking `time.Timer`.
+
+The `Sequencer.SignRoot()` method has been removed.
 
 ## v1.2.1 - Map race fixed. TLS client support. LogClient improvements
 
@@ -43,6 +646,16 @@ access as this was an unexpected side effect. Clients now have explicit control
 of when the root is updated by calling `UpdateRoot`.
 
 A root parameter is now required when log clients are constructed.
+
+The client will now only retry requests that fail with the following errors:
+
+-   Aborted
+-   DeadlineExceeded
+-   ResourceExhausted
+-   Unavailable
+
+There is one exception - it will also retry InitLog/InitMap requests that fail
+due to a FailedPrecondition error.
 
 ### Other
 

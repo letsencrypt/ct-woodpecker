@@ -127,7 +127,7 @@ func TestObserveSTH(t *testing.T) {
 // valid.
 type mockVerifier struct{}
 
-func (v mockVerifier) VerifyConsistencyProof(_, _ int64, _, _ []byte, _ [][]byte) error {
+func (v mockVerifier) VerifyInclusion(_, _ uint64, _ []byte, _ [][]byte, _ []byte) error {
 	// mockVerifier does not actual verification and returns nil to indicate
 	// everything is a-OK
 	return nil

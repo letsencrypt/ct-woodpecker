@@ -1,4 +1,4 @@
-// Copyright 2018 Google Inc. All Rights Reserved.
+// Copyright 2018 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/any"
 	"github.com/google/trillian"
-	"github.com/google/trillian/crypto/keyspb"
-	spb "github.com/google/trillian/crypto/sigpb"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ToMillisSinceEpoch converts a timestamp into milliseconds since epoch
@@ -95,28 +92,13 @@ func ReadTree(row Row) (*trillian.Tree, error) {
 	} else {
 		return nil, fmt.Errorf("unknown TreeType: %v", treeType)
 	}
-	if hs, ok := trillian.HashStrategy_value[hashStrategy]; ok {
-		tree.HashStrategy = trillian.HashStrategy(hs)
-	} else {
+	if hashStrategy != "RFC6962_SHA256" {
 		return nil, fmt.Errorf("unknown HashStrategy: %v", hashStrategy)
-	}
-	if ha, ok := spb.DigitallySigned_HashAlgorithm_value[hashAlgorithm]; ok {
-		tree.HashAlgorithm = spb.DigitallySigned_HashAlgorithm(ha)
-	} else {
-		return nil, fmt.Errorf("unknown HashAlgorithm: %v", hashAlgorithm)
-	}
-	if sa, ok := spb.DigitallySigned_SignatureAlgorithm_value[signatureAlgorithm]; ok {
-		tree.SignatureAlgorithm = spb.DigitallySigned_SignatureAlgorithm(sa)
-	} else {
-		return nil, fmt.Errorf("unknown SignatureAlgorithm: %v", signatureAlgorithm)
 	}
 
 	// Let's make sure we didn't mismatch any of the casts above
 	ok := tree.TreeState.String() == treeState &&
-		tree.TreeType.String() == treeType &&
-		tree.HashStrategy.String() == hashStrategy &&
-		tree.HashAlgorithm.String() == hashAlgorithm &&
-		tree.SignatureAlgorithm.String() == signatureAlgorithm
+		tree.TreeType.String() == treeType
 	if !ok {
 		return nil, fmt.Errorf(
 			"mismatched enum: tree = %v, enums = [%v, %v, %v, %v, %v]",
@@ -124,27 +106,21 @@ func ReadTree(row Row) (*trillian.Tree, error) {
 			treeState, treeType, hashStrategy, hashAlgorithm, signatureAlgorithm)
 	}
 
-	tree.CreateTime, err = ptypes.TimestampProto(FromMillisSinceEpoch(createMillis))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse create time: %v", err)
+	tree.CreateTime = timestamppb.New(FromMillisSinceEpoch(createMillis))
+	if err := tree.CreateTime.CheckValid(); err != nil {
+		return nil, fmt.Errorf("failed to parse create time: %w", err)
 	}
-	tree.UpdateTime, err = ptypes.TimestampProto(FromMillisSinceEpoch(updateMillis))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse update time: %v", err)
+	tree.UpdateTime = timestamppb.New(FromMillisSinceEpoch(updateMillis))
+	if err := tree.UpdateTime.CheckValid(); err != nil {
+		return nil, fmt.Errorf("failed to parse update time: %w", err)
 	}
-	tree.MaxRootDuration = ptypes.DurationProto(time.Duration(maxRootDurationMillis * int64(time.Millisecond)))
-
-	tree.PrivateKey = &any.Any{}
-	if err := proto.Unmarshal(privateKey, tree.PrivateKey); err != nil {
-		return nil, fmt.Errorf("could not unmarshal PrivateKey: %v", err)
-	}
-	tree.PublicKey = &keyspb.PublicKey{Der: publicKey}
+	tree.MaxRootDuration = durationpb.New(time.Duration(maxRootDurationMillis * int64(time.Millisecond)))
 
 	tree.Deleted = deleted.Valid && deleted.Bool
 	if tree.Deleted && deleteMillis.Valid {
-		tree.DeleteTime, err = ptypes.TimestampProto(FromMillisSinceEpoch(deleteMillis.Int64))
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse delete time: %v", err)
+		tree.DeleteTime = timestamppb.New(FromMillisSinceEpoch(deleteMillis.Int64))
+		if err := tree.DeleteTime.CheckValid(); err != nil {
+			return nil, fmt.Errorf("failed to parse delete time: %w", err)
 		}
 	}
 

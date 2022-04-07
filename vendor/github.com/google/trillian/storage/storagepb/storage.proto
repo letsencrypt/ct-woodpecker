@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,18 +13,12 @@
 // limitations under the License.
 
 syntax = "proto3";
+option go_package = "github.com/google/trillian/storage/storagepb";
 
 package storagepb;
 
 // This file contains protos used only by storage. They are not exported via any
 // of our public APIs.
-
-// NodeIDProto is the serialized form of NodeID. It's used only for persistence
-// in storage. As this is long-term we prefer not to use a Go specific format.
-message NodeIDProto {
-  bytes path = 1;
-  int32 prefix_len_bits = 2;
-}
 
 // SubtreeProto contains nodes of a subtree.
 message SubtreeProto {
@@ -32,8 +26,6 @@ message SubtreeProto {
   bytes prefix = 1;
   // subtree's depth
   int32 depth = 2;
-
-  bytes root_hash = 3;
 
   // map of suffix (within subtree) to subtree-leaf node hash
   map<string, bytes> leaves = 4;
@@ -46,4 +38,6 @@ message SubtreeProto {
   // Used as a crosscheck on the internal node map by recording its expected
   // size after loading and repopulation.
   uint32 internal_node_count = 6;
+
+  reserved 3;
 }

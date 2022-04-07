@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ type MetricFactory interface {
 	NewCounter(name, help string, labelNames ...string) Counter
 	NewGauge(name, help string, labelNames ...string) Gauge
 	NewHistogram(name, help string, labelNames ...string) Histogram
+	NewHistogramWithBuckets(name, help string, buckets []float64, labelNames ...string) Histogram
 }
 
 // Counter is a metric class for numeric values that increase.

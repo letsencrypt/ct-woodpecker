@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package pem
 
 import (
+	"context"
 	"crypto"
 	"crypto/x509"
 	"encoding/pem"
@@ -24,12 +25,8 @@ import (
 
 	"github.com/google/trillian/crypto/keys/der"
 	"github.com/google/trillian/crypto/keyspb"
+	"google.golang.org/protobuf/proto"
 )
-
-// FromProto takes a PEMKeyFile protobuf message and loads the private key it specifies.
-func FromProto(pb *keyspb.PEMKeyFile) (crypto.Signer, error) {
-	return ReadPrivateKeyFile(pb.GetPath(), pb.GetPassword())
-}
 
 // ReadPrivateKeyFile reads a PEM-encoded private key from a file.
 // The key must be protected by a password.
@@ -51,16 +48,6 @@ func ReadPrivateKeyFile(file, password string) (crypto.Signer, error) {
 	return k, nil
 }
 
-// ReadPublicKeyFile reads a PEM-encoded public key from a file.
-func ReadPublicKeyFile(file string) (crypto.PublicKey, error) {
-	keyPEM, err := ioutil.ReadFile(file)
-	if err != nil {
-		return nil, fmt.Errorf("pemfile: error reading %q: %v", file, err)
-	}
-
-	return UnmarshalPublicKey(string(keyPEM))
-}
-
 // UnmarshalPrivateKey reads a PEM-encoded private key from a string.
 // The key may be protected by a password.
 func UnmarshalPrivateKey(keyPEM, password string) (crypto.Signer, error) {
@@ -74,7 +61,7 @@ func UnmarshalPrivateKey(keyPEM, password string) (crypto.Signer, error) {
 
 	keyDER := block.Bytes
 	if password != "" {
-		pwdDer, err := x509.DecryptPEMBlock(block, []byte(password))
+		pwdDer, err := x509.DecryptPEMBlock(block, []byte(password)) //nolint:staticcheck
 		if err != nil {
 			return nil, fmt.Errorf("pemfile: failed to decrypt: %v", err)
 		}
@@ -84,15 +71,10 @@ func UnmarshalPrivateKey(keyPEM, password string) (crypto.Signer, error) {
 	return der.UnmarshalPrivateKey(keyDER)
 }
 
-// UnmarshalPublicKey reads a PEM-encoded public key from a string.
-func UnmarshalPublicKey(keyPEM string) (crypto.PublicKey, error) {
-	block, rest := pem.Decode([]byte(keyPEM))
-	if block == nil {
-		return nil, errors.New("pemfile: invalid public key PEM")
+// FromProto builds a crypto.Signer from a proto.Message, which must be of type PEMKeyFile.
+func FromProto(_ context.Context, pb proto.Message) (crypto.Signer, error) {
+	if pb, ok := pb.(*keyspb.PEMKeyFile); ok {
+		return ReadPrivateKeyFile(pb.GetPath(), pb.GetPassword())
 	}
-	if len(rest) > 0 {
-		return nil, errors.New("pemfile: extra data found after first PEM block")
-	}
-
-	return der.UnmarshalPublicKey(block.Bytes)
+	return nil, fmt.Errorf("pemfile: got %T, want *keyspb.PEMKeyFile", pb)
 }

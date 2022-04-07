@@ -1,4 +1,4 @@
-// Copyright 2018 Google Inc. All Rights Reserved.
+// Copyright 2018 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/asn1"
 	"github.com/google/certificate-transparency-go/tls"
 	"github.com/google/certificate-transparency-go/x509"
+
+	ct "github.com/google/certificate-transparency-go"
 )
 
 // OIDExtensionCTSTH is the OID value for an X.509 extension that holds

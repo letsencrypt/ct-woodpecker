@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package test
@@ -101,7 +102,7 @@ func testServers(personalities []cttestsrv.Personality) ([]*cttestsrv.Integratio
 		logger := log.New(os.Stdout, fmt.Sprintf("ct-test-srv %q ", p.Addr), log.LstdFlags)
 		srv, err := cttestsrv.NewServer(p, logger)
 		if err != nil {
-			logger.Fatal(err)
+			panic(fmt.Sprintf("starting cttestsrv: %s", err))
 		}
 		servers = append(servers, srv)
 		srv.Run()

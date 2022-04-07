@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google LLC. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,8 @@
 
 package trillian
 
-//go:generate protoc -I=. -I=$GOPATH/src -I=$GOPATH/src/github.com/googleapis/googleapis --go_out=plugins=grpc:$GOPATH/src trillian_log_api.proto trillian_log_sequencer_api.proto trillian_map_api.proto trillian_admin_api.proto trillian.proto --doc_out=markdown,api.md:./docs/
-//go:generate protoc -I=. --go_out=:$GOPATH/src crypto/sigpb/sigpb.proto
-//go:generate protoc -I=. --go_out=:$GOPATH/src crypto/keyspb/keyspb.proto
-//go:generate protoc -I=. -I=$GOPATH/src -I=$GOPATH/src/github.com/googleapis/googleapis --grpc-gateway_out=logtostderr=true:$GOPATH/src trillian_log_api.proto trillian_map_api.proto trillian_admin_api.proto trillian.proto
+//go:generate protoc -I=. -I=$GOPATH/src -I=$GOPATH/src/github.com/googleapis/googleapis --go_out=paths=source_relative:. --go-grpc_out=paths=source_relative:. --go-grpc_opt=require_unimplemented_servers=false trillian_log_api.proto trillian_admin_api.proto trillian.proto --doc_out=markdown,api.md:./docs/
+//go:generate protoc -I=. --go_out=paths=source_relative:. crypto/keyspb/keyspb.proto
 
 //go:generate mockgen -package tmock -destination testonly/tmock/mock_log_server.go  github.com/google/trillian TrillianLogServer
-//go:generate mockgen -package tmock -destination testonly/tmock/mock_map_server.go  github.com/google/trillian TrillianMapServer
 //go:generate mockgen -package tmock -destination testonly/tmock/mock_admin_server.go github.com/google/trillian TrillianAdminServer
