@@ -209,8 +209,8 @@ github.com/jhump/protoreflect/dynamic/grpcdynamic
 github.com/jhump/protoreflect/grpcreflect
 github.com/jhump/protoreflect/internal
 github.com/jhump/protoreflect/internal/codec
-# github.com/jmhodges/clock v0.0.0-20211218015646-21de17d65b1b
-## explicit; go 1.17
+# github.com/jmhodges/clock v0.0.0-20160418191101-880ee4c33548
+## explicit
 github.com/jmhodges/clock
 # github.com/jonboulle/clockwork v0.2.2
 ## explicit; go 1.13
