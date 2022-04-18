@@ -273,7 +273,7 @@ github.com/spf13/pflag
 # github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802
 ## explicit
 github.com/tmc/grpc-websocket-proxy/wsproxy
-# github.com/transparency-dev/merkle v0.0.0-20220401133819-3a5b1d72b2dd
+# github.com/transparency-dev/merkle v0.0.0-20220411132142-cfdaeb1822ee
 ## explicit; go 1.16
 github.com/transparency-dev/merkle
 # github.com/urfave/cli v1.22.4

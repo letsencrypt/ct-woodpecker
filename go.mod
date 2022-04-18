@@ -7,7 +7,7 @@ require (
 	github.com/jmhodges/clock v0.0.0-20160418191101-880ee4c33548
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/client_model v0.2.0
-	github.com/transparency-dev/merkle v0.0.0-20220401133819-3a5b1d72b2dd
+	github.com/transparency-dev/merkle v0.0.0-20220411132142-cfdaeb1822ee
 	google.golang.org/protobuf v1.28.0
 )
 
