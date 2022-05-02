@@ -1,6 +1,6 @@
 # Merkle
 
-[![GoDoc](https://godoc.org/github.com/transparency-dev/merkle?status.svg)](https://godoc.org/github.com/transparency-dev/merkle)
+[![Go Reference](https://pkg.go.dev/badge/github.com/transparency-dev/merkle.svg)](https://pkg.go.dev/github.com/transparency-dev/merkle)
 [![Go Report
 Card](https://goreportcard.com/badge/github.com/transparency-dev/merkle)](https://goreportcard.com/report/github.com/transparency-dev/merkle)
 [![codecov](https://codecov.io/gh/transparency-dev/merkle/branch/main/graph/badge.svg?token=BBCRAMOBY2)](https://codecov.io/gh/transparency-dev/merkle)

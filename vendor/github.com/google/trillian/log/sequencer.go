@@ -24,14 +24,14 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/google/trillian"
-	"github.com/google/trillian/merkle/compact"
-	"github.com/google/trillian/merkle/rfc6962"
 	"github.com/google/trillian/monitoring"
 	"github.com/google/trillian/quota"
 	"github.com/google/trillian/storage"
 	"github.com/google/trillian/storage/tree"
 	"github.com/google/trillian/types"
 	"github.com/google/trillian/util/clock"
+	"github.com/transparency-dev/merkle/compact"
+	"github.com/transparency-dev/merkle/rfc6962"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -105,7 +105,7 @@ func initCompactRangeFromStorage(ctx context.Context, root *types.LogRootV1, tx 
 		return fact.NewEmptyRange(0), nil
 	}
 
-	ids := compact.RangeNodes(0, root.TreeSize)
+	ids := compact.RangeNodes(0, root.TreeSize, nil)
 	nodes, err := tx.GetMerkleNodes(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read tree nodes: %v", err)
@@ -180,9 +180,7 @@ func updateCompactRange(cr *compact.Range, leaves []*trillian.LogLeaf, label str
 		if size := cr.End(); idx < 0 || idx != int64(size) {
 			return nil, nil, fmt.Errorf("leaf index mismatch: got %d, want %d", idx, size)
 		}
-		// Store the leaf hash in the Merkle tree.
-		store(compact.NewNodeID(0, uint64(idx)), leaf.MerkleLeafHash)
-		// Store all the new internal nodes.
+		// Store all the new internal nodes, including the added leaf.
 		if err := cr.Append(leaf.MerkleLeafHash, store); err != nil {
 			return nil, nil, err
 		}

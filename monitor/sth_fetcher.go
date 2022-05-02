@@ -9,10 +9,10 @@ import (
 	"time"
 
 	ct "github.com/google/certificate-transparency-go"
-	"github.com/google/trillian/merkle/rfc6962"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/transparency-dev/merkle"
+	"github.com/transparency-dev/merkle/rfc6962"
 )
 
 // sthFetchStats is a type to hold the prometheus metrics used by
