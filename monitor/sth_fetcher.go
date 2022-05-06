@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/transparency-dev/merkle"
+	"github.com/transparency-dev/merkle/proof"
 	"github.com/transparency-dev/merkle/rfc6962"
 )
 
@@ -82,13 +83,6 @@ func (o FetcherOptions) Valid() error {
 	return nil
 }
 
-// sthFetcherVerifier is an interface that specifies the merkle.LogVerifier
-// functions that the sthFetcher uses. This interface allows for easy
-// shimming of client methods with mock implementations for unit testing.
-type sthFetcherVerifier interface {
-	VerifyInclusion(uint64, uint64, []byte, [][]byte, []byte) error
-}
-
 // sthFetcher is a monitorCheck type for periodically fetching a log's STH and publishing
 // metrics about it.
 type sthFetcher struct {
@@ -113,8 +107,9 @@ type sthFetcher struct {
 	prevSTHMu sync.Mutex
 
 	// verifier is used by verifySTHConsistency to prove consistency between two
-	// STHs
-	verifier sthFetcherVerifier
+	// STHs. This function signature matches that of proof.VerifyInclusion, and
+	// will usually be satisfied by that function, but can be mocked out by tests.
+	verify func(merkle.LogHasher, uint64, uint64, []byte, [][]byte, []byte) error
 }
 
 // newSTHFetcher returns an sthFetcher instance populated based on the provided
@@ -127,7 +122,7 @@ func newSTHFetcher(mc monitorCheck, opts *FetcherOptions, client monitorCTClient
 		sthTimeout:       opts.Timeout,
 		stats:            sthStats,
 		stopChannel:      make(chan bool),
-		verifier:         merkle.NewLogVerifier(rfc6962.DefaultHasher),
+		verify:           proof.VerifyInclusion,
 	}
 }
 
@@ -290,7 +285,8 @@ func (f *sthFetcher) verifySTHConsistency(firstSTH, secondSTH *ct.SignedTreeHead
 
 	// Verify the consistency proof. If the proof fails to verify then publish an
 	// increment to the `sthInconsistencies` stat
-	if err := f.verifier.VerifyInclusion(
+	if err := f.verify(
+		rfc6962.DefaultHasher,
 		firstTreeSize,
 		secondTreeSize,
 		firstHash,
