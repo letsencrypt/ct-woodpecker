@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package merkle provides Merkle tree interfaces and implementation.
 package merkle
+
+// TODO(pavelkalinnikov): Remove this root package. The only interface provided
+// here does not have to exist, and can be [re-]defined on the user side, such
+// as in compact or proof package.
 
 // LogHasher provides the hash functions needed to compute dense merkle trees.
 type LogHasher interface {
