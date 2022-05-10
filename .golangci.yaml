@@ -10,4 +10,5 @@ linters:
     - misspell
     - staticcheck
     - stylecheck
+    - unconvert
     - unused 

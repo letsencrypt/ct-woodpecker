@@ -190,11 +190,11 @@ func (tl *testLog) getProof(first, second uint64) (*trillian.GetConsistencyProof
 		return nil, err
 	}
 
-	if first < 1 || first > uint64(root.TreeSize) {
+	if first < 1 || first > root.TreeSize {
 		return nil, fmt.Errorf("Illegal first value: %d", first)
 	}
 
-	if second < 1 || second < first || second > uint64(root.TreeSize) {
+	if second < 1 || second < first || second > root.TreeSize {
 		return nil, fmt.Errorf("Illegal second value: %d", second)
 	}
 
