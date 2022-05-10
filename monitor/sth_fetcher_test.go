@@ -123,9 +123,9 @@ func TestObserveSTH(t *testing.T) {
 	}
 }
 
-// MockVerifyInclusion is a fake function with the same signature as
-// proof.VerifyInclusion, so it can be substituted for that function.
-func MockVerifyInclusion(_ merkle.LogHasher, _, _ uint64, _ []byte, _ [][]byte, _ []byte) error {
+// MockVerifyConsistency is a fake function with the same signature as
+// proof.VerifyConsistency, so it can be substituted for that function.
+func MockVerifyConsistency(_ merkle.LogHasher, _, _ uint64, _ [][]byte, _, _ []byte) error {
 	// mockVerifier does not actual verification and returns nil to indicate
 	// everything is a-OK
 	return nil
@@ -252,7 +252,7 @@ func TestVerifySTHConsistency(t *testing.T) {
 	}
 
 	// Replace the fetcher's verifier with one that assumes any proof is valid
-	f.verify = MockVerifyInclusion
+	f.verify = MockVerifyConsistency
 
 	// Verifying the consistency between two STHs using the mock verifier should
 	// not increment the inconsistencies stat but it should increment the number
@@ -291,7 +291,7 @@ func TestStaleSTHHandling(t *testing.T) {
 			Timeout:  time.Second,
 		},
 		errorClient{})
-	f.verify = MockVerifyInclusion
+	f.verify = MockVerifyConsistency
 
 	// First return a 2 hour old STH
 	timestampAge := 2 * time.Hour

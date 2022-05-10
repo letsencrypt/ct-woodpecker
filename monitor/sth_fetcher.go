@@ -106,10 +106,10 @@ type sthFetcher struct {
 	// prevSTHMu is a Mutex for controlling updates to prevSTH
 	prevSTHMu sync.Mutex
 
-	// verifier is used by verifySTHConsistency to prove consistency between two
-	// STHs. This function signature matches that of proof.VerifyInclusion, and
+	// verify is used by verifySTHConsistency to prove consistency between two
+	// STHs. This function signature matches that of proof.VerifyConsistency, and
 	// will usually be satisfied by that function, but can be mocked out by tests.
-	verify func(merkle.LogHasher, uint64, uint64, []byte, [][]byte, []byte) error
+	verify func(hasher merkle.LogHasher, size1 uint64, size2 uint64, proof [][]byte, root1 []byte, root2 []byte) error
 }
 
 // newSTHFetcher returns an sthFetcher instance populated based on the provided
@@ -122,7 +122,7 @@ func newSTHFetcher(mc monitorCheck, opts *FetcherOptions, client monitorCTClient
 		sthTimeout:       opts.Timeout,
 		stats:            sthStats,
 		stopChannel:      make(chan bool),
-		verify:           proof.VerifyInclusion,
+		verify:           proof.VerifyConsistency,
 	}
 }
 
@@ -289,8 +289,8 @@ func (f *sthFetcher) verifySTHConsistency(firstSTH, secondSTH *ct.SignedTreeHead
 		rfc6962.DefaultHasher,
 		firstTreeSize,
 		secondTreeSize,
-		firstHash,
 		consistencyProof,
+		firstHash,
 		secondHash); err != nil {
 		errorLabels := prometheus.Labels{"uri": f.logURI, "type": "failed-to-verify-proof"}
 		f.stats.sthInconsistencies.With(errorLabels).Inc()
