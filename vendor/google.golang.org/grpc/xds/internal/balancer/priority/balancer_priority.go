@@ -82,12 +82,13 @@ func (b *priorityBalancer) syncPriority() {
 	for p, name := range b.priorities {
 		child, ok := b.children[name]
 		if !ok {
-			b.logger.Errorf("child with name %q is not found in children", name)
+			b.logger.Warningf("child with name %q is not found in children", name)
 			continue
 		}
 
 		if !child.started ||
 			child.state.ConnectivityState == connectivity.Ready ||
+			child.state.ConnectivityState == connectivity.Idle ||
 			p == len(b.priorities)-1 {
 			if b.childInUse != "" && b.childInUse != child.name {
 				// childInUse was set and is different from this child, will
@@ -111,7 +112,7 @@ func (b *priorityBalancer) stopSubBalancersLowerThanPriority(p int) {
 		name := b.priorities[i]
 		child, ok := b.children[name]
 		if !ok {
-			b.logger.Errorf("child with name %q is not found in children", name)
+			b.logger.Warningf("child with name %q is not found in children", name)
 			continue
 		}
 		child.stop()
@@ -196,12 +197,12 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 
 	priority, ok := b.childToPriority[childName]
 	if !ok {
-		b.logger.Errorf("priority: received picker update with unknown child %v", childName)
+		b.logger.Warningf("priority: received picker update with unknown child %v", childName)
 		return
 	}
 
 	if b.childInUse == "" {
-		b.logger.Errorf("priority: no child is in use when picker update is received")
+		b.logger.Warningf("priority: no child is in use when picker update is received")
 		return
 	}
 
@@ -218,21 +219,24 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 	// necessary.
 	child, ok := b.children[childName]
 	if !ok {
-		b.logger.Errorf("priority: child balancer not found for child %v, priority %v", childName, priority)
+		b.logger.Warningf("priority: child balancer not found for child %v, priority %v", childName, priority)
 		return
 	}
 	oldState := child.state.ConnectivityState
 	child.state = s
 
 	switch s.ConnectivityState {
-	case connectivity.Ready:
+	case connectivity.Ready, connectivity.Idle:
+		// Note that idle is also handled as if it's Ready. It will close the
+		// lower priorities (which will be kept in a cache, not deleted), and
+		// new picks will use the Idle picker.
 		b.handlePriorityWithNewStateReady(child, priority)
 	case connectivity.TransientFailure:
 		b.handlePriorityWithNewStateTransientFailure(child, priority)
 	case connectivity.Connecting:
 		b.handlePriorityWithNewStateConnecting(child, priority, oldState)
 	default:
-		// New state is Idle, should never happen. Don't forward.
+		// New state is Shutdown, should never happen. Don't forward.
 	}
 }
 

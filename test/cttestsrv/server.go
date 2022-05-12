@@ -279,7 +279,7 @@ func (is *IntegrationSrv) GetEntries(start, end int64) (*ct.GetEntriesResponse, 
 // active testLog tree between the two requested treesizes. This function blocks
 // for a variable amount of time based on the latencySchedule and the current
 // latencyItem index. It is safe to call concurrently.
-func (is *IntegrationSrv) GetConsistencyProof(first, second int64) (*ct.GetSTHConsistencyResponse, error) {
+func (is *IntegrationSrv) GetConsistencyProof(first, second uint64) (*ct.GetSTHConsistencyResponse, error) {
 	is.sleep()
 
 	is.RLock()

@@ -209,13 +209,13 @@ func (is *IntegrationSrv) getConsistencyHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	first, err := strconv.ParseInt(firstArgs[0], 10, 64)
+	first, err := strconv.ParseUint(firstArgs[0], 10, 64)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	second, err := strconv.ParseInt(secondArgs[0], 10, 64)
+	second, err := strconv.ParseUint(secondArgs[0], 10, 64)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

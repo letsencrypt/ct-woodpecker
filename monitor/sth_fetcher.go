@@ -9,10 +9,11 @@ import (
 	"time"
 
 	ct "github.com/google/certificate-transparency-go"
-	"github.com/google/trillian/merkle/rfc6962"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/transparency-dev/merkle"
+	"github.com/transparency-dev/merkle/proof"
+	"github.com/transparency-dev/merkle/rfc6962"
 )
 
 // sthFetchStats is a type to hold the prometheus metrics used by
@@ -82,13 +83,6 @@ func (o FetcherOptions) Valid() error {
 	return nil
 }
 
-// sthFetcherVerifier is an interface that specifies the merkle.LogVerifier
-// functions that the sthFetcher uses. This interface allows for easy
-// shimming of client methods with mock implementations for unit testing.
-type sthFetcherVerifier interface {
-	VerifyInclusion(uint64, uint64, []byte, [][]byte, []byte) error
-}
-
 // sthFetcher is a monitorCheck type for periodically fetching a log's STH and publishing
 // metrics about it.
 type sthFetcher struct {
@@ -112,9 +106,10 @@ type sthFetcher struct {
 	// prevSTHMu is a Mutex for controlling updates to prevSTH
 	prevSTHMu sync.Mutex
 
-	// verifier is used by verifySTHConsistency to prove consistency between two
-	// STHs
-	verifier sthFetcherVerifier
+	// verify is used by verifySTHConsistency to prove consistency between two
+	// STHs. This function signature matches that of proof.VerifyConsistency, and
+	// will usually be satisfied by that function, but can be mocked out by tests.
+	verify func(hasher merkle.LogHasher, size1 uint64, size2 uint64, proof [][]byte, root1 []byte, root2 []byte) error
 }
 
 // newSTHFetcher returns an sthFetcher instance populated based on the provided
@@ -127,7 +122,7 @@ func newSTHFetcher(mc monitorCheck, opts *FetcherOptions, client monitorCTClient
 		sthTimeout:       opts.Timeout,
 		stats:            sthStats,
 		stopChannel:      make(chan bool),
-		verifier:         merkle.NewLogVerifier(rfc6962.DefaultHasher),
+		verify:           proof.VerifyConsistency,
 	}
 }
 
@@ -290,11 +285,12 @@ func (f *sthFetcher) verifySTHConsistency(firstSTH, secondSTH *ct.SignedTreeHead
 
 	// Verify the consistency proof. If the proof fails to verify then publish an
 	// increment to the `sthInconsistencies` stat
-	if err := f.verifier.VerifyInclusion(
+	if err := f.verify(
+		rfc6962.DefaultHasher,
 		firstTreeSize,
 		secondTreeSize,
-		firstHash,
 		consistencyProof,
+		firstHash,
 		secondHash); err != nil {
 		errorLabels := prometheus.Labels{"uri": f.logURI, "type": "failed-to-verify-proof"}
 		f.stats.sthInconsistencies.With(errorLabels).Inc()

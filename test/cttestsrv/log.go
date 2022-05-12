@@ -21,14 +21,14 @@ import (
 	"github.com/google/trillian/crypto/keys/pem"
 	"github.com/google/trillian/crypto/keyspb"
 	"github.com/google/trillian/log"
-	"github.com/google/trillian/merkle"
-	"github.com/google/trillian/merkle/hashers"
-	"github.com/google/trillian/merkle/rfc6962"
 	"github.com/google/trillian/monitoring"
 	"github.com/google/trillian/storage"
 	"github.com/google/trillian/storage/memory"
 	"github.com/google/trillian/types"
 	"github.com/google/trillian/util/clock"
+	"github.com/transparency-dev/merkle"
+	"github.com/transparency-dev/merkle/proof"
+	"github.com/transparency-dev/merkle/rfc6962"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -48,7 +48,7 @@ type testTree struct {
 	logStorage storage.LogStorage
 	tree       *trillian.Tree
 
-	hasher hashers.LogHasher
+	hasher merkle.LogHasher
 }
 
 // a testLog is a CT log that maintains two in-memory testTrees. Only one
@@ -173,7 +173,7 @@ func (tl *testLog) switchTrees() *testTree {
 
 // getProof gets a trillian consistency proof between the first and second tree
 // sizes, or returns an error. Minimal request parameter validation is done.
-func (tl *testLog) getProof(first, second int64) (*trillian.GetConsistencyProofResponse, error) {
+func (tl *testLog) getProof(first, second uint64) (*trillian.GetConsistencyProofResponse, error) {
 	tx, err := tl.activeTree.logStorage.SnapshotForTree(context.Background(), tl.activeTree.tree)
 	defer func() { _ = tx.Close() }()
 
@@ -190,20 +190,20 @@ func (tl *testLog) getProof(first, second int64) (*trillian.GetConsistencyProofR
 		return nil, err
 	}
 
-	if first < 1 || first > int64(root.TreeSize) {
+	if first < 1 || first > root.TreeSize {
 		return nil, fmt.Errorf("Illegal first value: %d", first)
 	}
 
-	if second < 1 || second < first || second > int64(root.TreeSize) {
+	if second < 1 || second < first || second > root.TreeSize {
 		return nil, fmt.Errorf("Illegal second value: %d", second)
 	}
 
-	nodeFetches, err := merkle.CalcConsistencyProofNodeAddresses(first, second)
+	nodeIDs, err := proof.Consistency(first, second)
 	if err != nil {
 		return nil, err
 	}
 
-	proof, err := fetchNodesAndBuildProof(context.Background(), tx, tl.activeTree.hasher, 0, nodeFetches)
+	proof, err := fetchNodesAndBuildProof(context.Background(), tx, tl.activeTree.hasher.HashChildren, 0, nodeIDs)
 	if err != nil {
 		return nil, err
 	}
