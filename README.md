@@ -1,7 +1,7 @@
 # CT Woodpecker
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/letsencrypt/ct-woodpecker/main/logo.jpg" alt="ct-woodpecker: poking holes in logs"/>
+  <img src="https://raw.githubusercontent.com/letsencrypt/ct-woodpecker/main/logo.jpg" height="100" alt="ct-woodpecker: poking holes in logs"/>
 <p>
 
 [![Build Status](https://travis-ci.org/letsencrypt/ct-woodpecker.svg?branch=master)](https://travis-ci.org/letsencrypt/ct-woodpecker)
