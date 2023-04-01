@@ -1,4 +1,4 @@
-FROM golang:1.11-alpine as builder
+FROM golang:1.20.2-alpine as builder
 
 RUN apk --update upgrade \
 && apk --no-cache --no-progress add git bash curl \
@@ -12,7 +12,7 @@ COPY . .
 RUN go install -v ./cmd/ct-malformed/...
 
 ## main
-FROM alpine:3.8
+FROM alpine:3.17.3
 
 RUN apk update && apk add --no-cache --virtual ca-certificates
 
