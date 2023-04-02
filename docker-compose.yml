@@ -58,7 +58,7 @@ services:
       command: mysqld --bind-address=0.0.0.0
 
   prometheus:
-    image: prom/prometheus:v2.1.0
+    image: prom/prometheus:v2.43.0
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
