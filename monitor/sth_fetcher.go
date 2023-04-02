@@ -203,16 +203,21 @@ func (f *sthFetcher) observeSTH() {
 // firstSTH and secondSTH. If the two STHs don't verify then the
 // `sth_inconsistencies` prometheus counter is incremented with a label
 // indicating the category of inconsistency and an error is logged with
-// `logErrorf`. Presently there are three possible categories of STH consistency
-// failure:
-// 1. "equal-treesize-inequal-hash" - the two STHs are the same tree size but
-//    have different root hashes.
-// 2. "failed-to-get-proof" - the monitor encountered an error getting
-//    a consistency proof between the two STHs from the log.
-// 3. "failed-to-verify-proof" - the monitor returned a proof of consistency
-//    between the two STHs that did not verify.
-// When the monitor fetches a consistency proof from the log it publishes the
-// latency of the operation to the `sth_proof_latency` prometheus histogram.
+// `logErrorf`. Presently there are three possible categories of STH
+// consistency failure:
+//
+// 1. "equal-treesize-inequal-hash" - the two STHs are the same tree size
+// but have different root hashes.
+//
+// 2. "failed-to-get-proof" - the monitor encountered an error getting a
+// consistency proof between the two STHs from the log.
+//
+// 3. "failed-to-verify-proof" - the monitor returned a proof of
+// consistency between the two STHs that did not verify.
+//
+// When the monitor fetches a consistency proof from the log it publishes
+// the latency of the operation to the `sth_proof_latency` prometheus
+// histogram.
 func (f *sthFetcher) verifySTHConsistency(firstSTH, secondSTH *ct.SignedTreeHead) {
 	if firstSTH == nil || secondSTH == nil {
 		f.logErrorf("firstSTH or secondSTH was nil")

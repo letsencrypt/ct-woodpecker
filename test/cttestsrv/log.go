@@ -11,7 +11,6 @@ import (
 	"time"
 
 	ct "github.com/google/certificate-transparency-go"
-	"github.com/google/certificate-transparency-go/tls"
 	cttls "github.com/google/certificate-transparency-go/tls"
 	ctfe "github.com/google/certificate-transparency-go/trillian/ctfe"
 	"github.com/google/certificate-transparency-go/trillian/util"
@@ -99,7 +98,7 @@ func makeTree(name string, _ *ecdsa.PrivateKey) (*testTree, error) {
 
 	// initialize the tree with an empty STH
 	if err := initSTH(tt); err != nil {
-		return nil, fmt.Errorf("initalizing STH: %w", err)
+		return nil, fmt.Errorf("initializing STH: %w", err)
 	}
 
 	return tt, nil
@@ -111,14 +110,14 @@ func initSTH(tt *testTree) error {
 
 	// init the new tree by signing a STH for the empty root
 	slr := types.LogRoot{
-		Version: tls.Enum(trillian.LogRootFormat_LOG_ROOT_FORMAT_V1),
+		Version: cttls.Enum(trillian.LogRootFormat_LOG_ROOT_FORMAT_V1),
 		V1: &types.LogRootV1{
 			TreeSize:       0,
 			RootHash:       emptyRootHash[:],
 			TimestampNanos: uint64(timeSource.Now().UnixNano()),
 		},
 	}
-	slrBytes, err := tls.Marshal(slr)
+	slrBytes, err := cttls.Marshal(slr)
 	if err != nil {
 		return err
 	}
@@ -239,7 +238,7 @@ func (tl *testLog) getSTH() (*ct.SignedTreeHead, error) {
 	}
 
 	var slr ct.SignedTreeHead
-	_, err = tls.Unmarshal(signedLogRoot.LogRoot, &slr)
+	_, err = cttls.Unmarshal(signedLogRoot.LogRoot, &slr)
 	if err != nil {
 		return nil, err
 	}
