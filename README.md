@@ -357,9 +357,8 @@ package hiearchy:
 * `test/cttestsrv` - a purpose built in-memory mock CT log for integration
    testing.
 
-All pull requests must be reviewed by one of the maintainers (currently [@cpu][cpu],
-[@jsha][jsha], and [@roland][roland]) before merging. We expect all changes to
-have robust unit tests.
+All pull requests must be reviewed by one of the maintainers before merging.
+We expect all changes to have robust unit tests.
 
 ## Photo credit
 
@@ -377,6 +376,4 @@ Photographed by [@cpu][cpu] March 2018.
 [docker-compose]: https://docs.docker.com/compose/install/
 [pileated]: https://en.wikipedia.org/wiki/Pileated_woodpecker
 [cpu]: https://github.com/cpu
-[roland]: https://github.com/roland
-[jsha]: https://github.com/jsha
 [cttestsrv-management-handlers]: https://github.com/letsencrypt/ct-woodpecker/blob/main/test/cttestsrv/management_handlers.go
