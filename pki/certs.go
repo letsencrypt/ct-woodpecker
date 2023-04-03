@@ -117,9 +117,6 @@ type CertificatePair struct {
 // If windowStart and windowEnd are not nil then issue a 90 day
 // certificate that falls in the window.
 //
-// with a NotAfter of `windowEnd - 1 hour` and a NotBefore
-// 90 days earlier.
-//
 // This function creates certificates that will be submitted to public
 // logs and so while they are not issued by a trusted root  we try to
 // avoid cablint errors to avoid requiring log monitors special-case our
@@ -147,8 +144,12 @@ func IssueTestCertificate(
 		return CertificatePair{}, err
 	}
 
+	// validityPeriod is 90 days minus 1 second, because RFC 5280 counts
+	// the final second as inclusive and golang counts it as exclusive.
+	validityPeriod := 90*24*time.Hour - time.Second
+
 	notBefore := clk.Now()
-	notAfter := notBefore.AddDate(0, 0, 90)
+	notAfter := notBefore.Add(validityPeriod)
 
 	// If `notAfter` generated from the system clock doesn't fall within the
 	// temporal shard window then we need to adjust the certificate validity
@@ -156,7 +157,7 @@ func IssueTestCertificate(
 	if windowEnd != nil {
 		if notAfter.Before(*windowStart) || notAfter.After(*windowEnd) {
 			notAfter = windowEnd.Add(-1 * time.Hour)
-			notBefore = notAfter.AddDate(0, 0, -90)
+			notBefore = notAfter.Add(-validityPeriod)
 		}
 	}
 

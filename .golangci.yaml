@@ -18,6 +18,6 @@ linters-settings:
     checks: ["all", "-ST1005"]
   gosec:
     excludes:
-      # TODO: Identify, fix, and remove violations of most of these rules
+      # TODO(#133): Identify, fix, and remove violations of most of these rules
       - G112 # Potential Slowloris Attack because ReadHeaderTimeout is not configured in the http.Server (gosec)
       - G404 # Use of weak random number generator (math/rand instead of crypto/rand)

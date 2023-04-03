@@ -185,12 +185,13 @@ func TestIssueTestCertificateWindowNil(t *testing.T) {
 	}
 
 	shortFormat := func(t time.Time) string {
-		return t.Format("2006-01-02")
+		return t.Format("2006-01-02 15:04")
 	}
 
 	// Check that the precert notbefore/notafter match defaults
-	now := shortFormat(clk.Now())
-	defaultNotAfter := shortFormat(clk.Now().AddDate(0, 0, 90))
+	now := shortFormat(clk.Now().UTC())
+	validityPeriod := 90*24*time.Hour - time.Second
+	defaultNotAfter := shortFormat(clk.Now().UTC().Add(validityPeriod))
 	notBefore := shortFormat(certPair.PreCert.NotBefore)
 	notAfter := shortFormat(certPair.PreCert.NotAfter)
 	if notBefore != now {
@@ -222,6 +223,7 @@ func TestIssueTestCertificateWindowNotNil(t *testing.T) {
 	issuerKey, _ := RandKey()
 	issuerCert := &x509.Certificate{}
 	clk := clock.New()
+	validityPeriod := 90*24*time.Hour - time.Second
 
 	// set window for a shard that is in its active temporal window
 	currentWindowStart := clk.Now().AddDate(0, 0, -30)
@@ -274,15 +276,15 @@ func TestIssueTestCertificateWindowNotNil(t *testing.T) {
 			}
 
 			shortFormat := func(t time.Time) string {
-				return t.Format("2006-01-02")
+				return t.Format("2006-01-02 15:04:05")
 			}
 
 			// Check the precert notbefore/notafter match expected
-			notBefore := certPair.PreCert.NotBefore
-			notAfter := certPair.PreCert.NotAfter
-			if certPair.PreCert.NotAfter != certPair.PreCert.NotBefore.AddDate(0, 0, 90) {
+			notAfter := shortFormat(certPair.PreCert.NotAfter)
+			expectedNotAfter := shortFormat(certPair.PreCert.NotBefore.Add(validityPeriod))
+			if notAfter != expectedNotAfter {
 				t.Errorf("preCert notAfter was %q, expected %q",
-					notAfter, notBefore.AddDate(0, 0, 90))
+					notAfter, expectedNotAfter)
 			}
 			if certPair.PreCert.NotAfter.Before(tc.windowStart) || certPair.PreCert.NotAfter.After(tc.windowEnd) {
 				t.Errorf("preCert notAfter was %q, expected to be between %q and %q",
@@ -290,11 +292,11 @@ func TestIssueTestCertificateWindowNotNil(t *testing.T) {
 			}
 
 			// Check that the cert notbefore/notafter match expected
-			notBefore = certPair.Cert.NotBefore
-			notAfter = certPair.Cert.NotAfter
-			if certPair.Cert.NotAfter != certPair.Cert.NotBefore.AddDate(0, 0, 90) {
-				t.Errorf("preCert notAfter was %q, expected %q",
-					shortFormat(notAfter), shortFormat(notBefore.AddDate(0, 0, 90)))
+			notAfter = shortFormat(certPair.Cert.NotAfter)
+			expectedNotAfter = shortFormat(certPair.Cert.NotBefore.Add(validityPeriod))
+			if notAfter != expectedNotAfter {
+				t.Errorf("Cert notAfter was %q, expected %q",
+					notAfter, expectedNotAfter)
 			}
 			if certPair.Cert.NotAfter.Before(tc.windowStart) || certPair.Cert.NotAfter.After(tc.windowEnd) {
 				t.Errorf("cert notAfter was %q, expected to be between %q and %q",
