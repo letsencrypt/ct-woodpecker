@@ -5,7 +5,8 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,7 +16,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.17
+        go-version: 1.20.2
 
     - name: Install cover
       run: go install golang.org/x/tools/cmd/cover@latest

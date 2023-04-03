@@ -101,23 +101,26 @@ type CertificatePair struct {
 	Cert    *x509.Certificate
 }
 
-// IssueTestCertificate uses the monitor's certIssuer and certIssuerKey to generate
-// a precertificate and a matching final leaf-certificate that can be submitted
-// to a log. The certificate's subject common name will be a random subdomain
-// based on the certificate serial under the provided baseDomain (or
-// defaultTestCertDomain domain if baseDomain is empty).
+// IssueTestCertificate uses the monitor's certIssuer and certIssuerKey to
+// generate a precertificate and a matching final leaf-certificate that
+// can be submitted to a log. The certificate's subject common name will
+// be a random subdomain based on the certificate serial under the
+// provided baseDomain (or defaultTestCertDomain domain if baseDomain is
+// empty).
 //
-// If windowStart is nil the certificate NotBefore will be set to the current
-// time based on the provided clock. If windowStart is not nil then the
-// certificate NotBefore will be set to the windowStart plus one day.
-
-// If windowEnd is nil the certificate NotAfter will be set to 90 days after the
-// current time based on the provided clock. If windowEnd is not nil then the
-// certificate NotAfter will be set to the windowEnd minus one day.
+// If windowStart is nil the certificate NotBefore will be set to the
+// current time based on the provided clock.
 //
-// This function creates certificates that will be submitted to public logs and
-// so while they are not issued by a trusted root  we try to avoid cablint
-// errors to avoid requiring log monitors special-case our submissions.
+// If windowEnd is nil the certificate NotAfter will be set to 90 days
+// after the current time based on the provided clock.
+//
+// If windowStart and windowEnd are not nil then issue a 90 day
+// certificate that falls in the window.
+//
+// This function creates certificates that will be submitted to public
+// logs and so while they are not issued by a trusted root  we try to
+// avoid cablint errors to avoid requiring log monitors special-case our
+// submissions.
 func IssueTestCertificate(
 	baseDomain string,
 	issuerKey *ecdsa.PrivateKey,
@@ -141,16 +144,21 @@ func IssueTestCertificate(
 		return CertificatePair{}, err
 	}
 
-	earliest := clk.Now()
-	latest := earliest.AddDate(0, 0, 90)
+	// validityPeriod is 90 days minus 1 second, because RFC 5280 counts
+	// the final second as inclusive and golang counts it as exclusive.
+	validityPeriod := 90*24*time.Hour - time.Second
 
-	if windowStart != nil {
-		earliest = *windowStart
-		earliest.AddDate(0, 0, 1)
-	}
+	notBefore := clk.Now()
+	notAfter := notBefore.Add(validityPeriod)
+
+	// If `notAfter` generated from the system clock doesn't fall within the
+	// temporal shard window then we need to adjust the certificate validity
+	// to fall within the window.
 	if windowEnd != nil {
-		latest = *windowEnd
-		latest.AddDate(0, 0, -1)
+		if notAfter.Before(*windowStart) || notAfter.After(*windowEnd) {
+			notAfter = windowEnd.Add(-1 * time.Hour)
+			notBefore = notAfter.Add(-validityPeriod)
+		}
 	}
 
 	domain := hex.EncodeToString(serial.Bytes()[:5]) + baseDomain
@@ -162,8 +170,8 @@ func IssueTestCertificate(
 			},
 			DNSNames:              []string{domain},
 			SerialNumber:          serial,
-			NotBefore:             earliest,
-			NotAfter:              latest.AddDate(0, 0, -1),
+			NotBefore:             notBefore,
+			NotAfter:              notAfter,
 			KeyUsage:              x509.KeyUsageDigitalSignature,
 			ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 			BasicConstraintsValid: true,
