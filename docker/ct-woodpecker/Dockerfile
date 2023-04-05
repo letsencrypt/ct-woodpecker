@@ -1,4 +1,4 @@
-FROM golang:1.20.2-alpine as builder
+FROM golang:1.20.3-alpine as builder
 
 RUN apk --update upgrade \
 && apk --no-cache --no-progress add git bash curl build-base \
