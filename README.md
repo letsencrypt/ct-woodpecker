@@ -4,7 +4,6 @@
   <img src="https://github.com/letsencrypt/ct-woodpecker/raw/main/logo.jpg" alt="ct-woodpecker: poking holes in logs"/>
 <p>
 
-[![Build Status](https://travis-ci.org/letsencrypt/ct-woodpecker.svg?branch=main)](https://travis-ci.org/letsencrypt/ct-woodpecker)
 [![Coverage Status](https://coveralls.io/repos/github/letsencrypt/ct-woodpecker/badge.svg?branch=cpu-goveralls)](https://coveralls.io/github/letsencrypt/ct-woodpecker?branch=cpu-goveralls)
 [![Go Report Card](https://goreportcard.com/badge/github.com/letsencrypt/ct-woodpecker)](https://goreportcard.com/report/github.com/letsencrypt/ct-woodpecker)
 [![GolangCI](https://golangci.com/badges/github.com/letsencrypt/ct-woodpecker.svg)](https://golangci.com/r/github.com/letsencrypt/ct-woodpecker)
