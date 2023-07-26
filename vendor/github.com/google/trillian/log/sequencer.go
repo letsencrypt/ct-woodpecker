@@ -17,12 +17,12 @@ package log
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/google/trillian"
 	"github.com/google/trillian/monitoring"
 	"github.com/google/trillian/quota"
@@ -33,6 +33,7 @@ import (
 	"github.com/transparency-dev/merkle/compact"
 	"github.com/transparency-dev/merkle/rfc6962"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"k8s.io/klog/v2"
 )
 
 const logIDLabel = "logid"
@@ -63,6 +64,9 @@ var (
 	// A factor <1 WILL lead to token shortages, therefore it'll be normalized to 1.
 	QuotaIncreaseFactor = 1.1
 )
+
+// TODO(https://github.com/google/trillian/issues/2786): Remove this flag in the next release.
+var _ = flag.String("tree_ids_with_no_ephemeral_nodes", "*", "[Deprecated] Comma-separated list of tree IDs for which storing the ephemeral nodes is disabled, or * to disable it for all trees")
 
 func quotaIncreaseFactor() float64 {
 	if QuotaIncreaseFactor < 1 {
@@ -185,8 +189,9 @@ func updateCompactRange(cr *compact.Range, leaves []*trillian.LogLeaf, label str
 			return nil, nil, err
 		}
 	}
-	// Store ephemeral nodes on the right border of the tree as well.
-	hash, err := cr.GetRootHash(store)
+
+	// Note: Ephemeral nodes are not stored.
+	hash, err := cr.GetRootHash(nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -296,7 +301,7 @@ func IntegrateBatch(ctx context.Context, tree *trillian.Tree, limit int, guardWi
 		seqTreeSize.Set(float64(currentRoot.TreeSize), label)
 
 		if currentRoot.RootHash == nil {
-			glog.Warningf("%v: Fresh log - no previous TreeHeads exist.", tree.TreeId)
+			klog.Warningf("%v: Fresh log - no previous TreeHeads exist.", tree.TreeId)
 			return storage.ErrTreeNeedsInit
 		}
 
@@ -329,10 +334,10 @@ func IntegrateBatch(ctx context.Context, tree *trillian.Tree, limit int, guardWi
 			interval := time.Duration(nowNanos - int64(currentRoot.TimestampNanos))
 			if maxRootDurationInterval == 0 || interval < maxRootDurationInterval {
 				// We have nothing to integrate into the tree.
-				glog.V(1).Infof("%v: No leaves sequenced in this signing operation", tree.TreeId)
+				klog.V(1).Infof("%v: No leaves sequenced in this signing operation", tree.TreeId)
 				return nil
 			}
-			glog.Infof("%v: Force new root generation as %v since last root", tree.TreeId, interval)
+			klog.Infof("%v: Force new root generation as %v since last root", tree.TreeId, interval)
 		}
 
 		stageStart = ts.Now()
@@ -412,7 +417,7 @@ func IntegrateBatch(ctx context.Context, tree *trillian.Tree, limit int, guardWi
 
 	seqCounter.Add(float64(numLeaves), label)
 	if newSLR != nil {
-		glog.Infof("%v: sequenced %v leaves, size %v", tree.TreeId, numLeaves, newLogRoot.TreeSize)
+		klog.Infof("%v: sequenced %v leaves, size %v", tree.TreeId, numLeaves, newLogRoot.TreeSize)
 	}
 	return numLeaves, nil
 }
@@ -434,10 +439,10 @@ func replenishQuota(ctx context.Context, numLeaves int, treeID int64, qm quota.M
 			{Group: quota.Global, Kind: quota.Read},
 			{Group: quota.Global, Kind: quota.Write},
 		}
-		glog.V(2).Infof("%v: replenishing %d tokens (numLeaves = %d)", treeID, tokens, numLeaves)
+		klog.V(2).Infof("%v: replenishing %d tokens (numLeaves = %d)", treeID, tokens, numLeaves)
 		err := qm.PutTokens(ctx, tokens, specs)
 		if err != nil {
-			glog.Warningf("%v: failed to replenish %d tokens: %v", treeID, tokens, err)
+			klog.Warningf("%v: failed to replenish %d tokens: %v", treeID, tokens, err)
 		}
 		quota.Metrics.IncReplenished(tokens, specs, err == nil)
 	}

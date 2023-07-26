@@ -18,15 +18,15 @@ import (
 	"crypto"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
-	"github.com/golang/glog"
 	ct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/trillian/ctfe/configpb"
 	"github.com/google/certificate-transparency-go/x509"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+	"k8s.io/klog/v2"
 )
 
 // ValidatedLogConfig represents the LogConfig with the information that has
@@ -45,7 +45,7 @@ type ValidatedLogConfig struct {
 // filename, which should contain text or binary-encoded protobuf configuration
 // data.
 func LogConfigFromFile(filename string) ([]*configpb.LogConfig, error) {
-	cfgBytes, err := ioutil.ReadFile(filename)
+	cfgBytes, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func ToMultiLogConfig(cfg []*configpb.LogConfig, beSpec string) *configpb.LogMul
 // filename, which should contain text or binary-encoded protobuf configuration data.
 // Does not do full validation of the config but checks that it is non empty.
 func MultiLogConfigFromFile(filename string) (*configpb.LogMultiConfig, error) {
-	cfgBytes, err := ioutil.ReadFile(filename)
+	cfgBytes, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -100,12 +100,13 @@ func MultiLogConfigFromFile(filename string) (*configpb.LogMultiConfig, error) {
 }
 
 // ValidateLogConfig checks that a single log config is valid. In particular:
-//  - A mirror log has a valid public key and no private key.
-//  - A non-mirror log has a private, and optionally a public key (both valid).
-//  - Each of NotBeforeStart and NotBeforeLimit, if set, is a valid timestamp
-//    proto. If both are set then NotBeforeStart <= NotBeforeLimit.
-//  - Merge delays (if present) are correct.
-//  - Frozen STH (if present) is correct and signed by the provided public key.
+//   - A mirror log has a valid public key and no private key.
+//   - A non-mirror log has a private, and optionally a public key (both valid).
+//   - Each of NotBeforeStart and NotBeforeLimit, if set, is a valid timestamp
+//     proto. If both are set then NotBeforeStart <= NotBeforeLimit.
+//   - Merge delays (if present) are correct.
+//   - Frozen STH (if present) is correct and signed by the provided public key.
+//
 // Returns the validated structures (useful to avoid double validation).
 func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 	if cfg.LogId == 0 {
@@ -151,7 +152,7 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 				// If "Any" is specified, then we can ignore the entire list and
 				// just disable EKU checking.
 				if ku == x509.ExtKeyUsageAny {
-					glog.Infof("%s: Found ExtKeyUsageAny, allowing all EKUs", cfg.Prefix)
+					klog.Infof("%s: Found ExtKeyUsageAny, allowing all EKUs", cfg.Prefix)
 					vCfg.KeyUsages = nil
 					break
 				}

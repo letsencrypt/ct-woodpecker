@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package pem contains functions for marshaling and unmarshaling keys in PEM format.
 package pem
 
 import (
@@ -21,7 +22,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/google/trillian/crypto/keys/der"
 	"github.com/google/trillian/crypto/keyspb"
@@ -35,7 +36,7 @@ func ReadPrivateKeyFile(file, password string) (crypto.Signer, error) {
 		return nil, fmt.Errorf("pemfile: empty password for file %q", file)
 	}
 
-	keyPEM, err := ioutil.ReadFile(file)
+	keyPEM, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("pemfile: error reading file %q: %v", file, err)
 	}

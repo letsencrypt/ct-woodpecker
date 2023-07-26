@@ -17,6 +17,9 @@ package ctfe
 import (
 	"context"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"net/http"
@@ -24,14 +27,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/google/certificate-transparency-go/asn1"
 	"github.com/google/certificate-transparency-go/schedule"
 	"github.com/google/certificate-transparency-go/trillian/util"
 	"github.com/google/certificate-transparency-go/x509"
+	"github.com/google/certificate-transparency-go/x509util"
 	"github.com/google/trillian"
 	"github.com/google/trillian/crypto/keys"
 	"github.com/google/trillian/monitoring"
+	"k8s.io/klog/v2"
 )
 
 // InstanceOptions describes the options for a log instance.
@@ -82,13 +86,21 @@ type Instance struct {
 // up-to-date with any tree head changes that are not triggered by us.
 func (i *Instance) RunUpdateSTH(ctx context.Context, period time.Duration) {
 	c := i.li.instanceOpts.Validated.Config
-	glog.Infof("Start internal get-sth operations on %v (%d)", c.Prefix, c.LogId)
+	klog.Infof("Start internal get-sth operations on %v (%d)", c.Prefix, c.LogId)
 	schedule.Every(ctx, period, func(ctx context.Context) {
-		glog.V(1).Infof("Force internal get-sth for %v (%d)", c.Prefix, c.LogId)
+		klog.V(1).Infof("Force internal get-sth for %v (%d)", c.Prefix, c.LogId)
 		if _, err := i.li.getSTH(ctx); err != nil {
-			glog.Warningf("Failed to retrieve STH for %v (%d): %v", c.Prefix, c.LogId, err)
+			klog.Warningf("Failed to retrieve STH for %v (%d): %v", c.Prefix, c.LogId, err)
 		}
 	})
+}
+
+// GetPublicKey returns the public key from the instance's signer.
+func (i *Instance) GetPublicKey() crypto.PublicKey {
+	if i.li != nil && i.li.signer != nil {
+		return i.li.signer.Public()
+	}
+	return nil
 }
 
 // SetUpInstance sets up a log (or log mirror) instance using the provided
@@ -112,7 +124,7 @@ func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 		return nil, errors.New("need to specify RootsPemFile")
 	}
 	// Load the trusted roots.
-	roots := NewPEMCertPool()
+	roots := x509util.NewPEMCertPool()
 	for _, pemFile := range cfg.RootsPemFile {
 		if err := roots.AppendCertsFromPEMFile(pemFile); err != nil {
 			return nil, fmt.Errorf("failed to read trusted roots: %v", err)
@@ -124,6 +136,26 @@ func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 		var err error
 		if signer, err = keys.NewSigner(ctx, vCfg.PrivKey); err != nil {
 			return nil, fmt.Errorf("failed to load private key: %v", err)
+		}
+
+		// If a public key has been configured for a log, check that it is consistent with the private key.
+		if vCfg.PubKey != nil {
+			switch pub := vCfg.PubKey.(type) {
+			case *ecdsa.PublicKey:
+				if !pub.Equal(signer.Public()) {
+					return nil, errors.New("public key is not consistent with private key")
+				}
+			case ed25519.PublicKey:
+				if !pub.Equal(signer.Public()) {
+					return nil, errors.New("public key is not consistent with private key")
+				}
+			case *rsa.PublicKey:
+				if !pub.Equal(signer.Public()) {
+					return nil, errors.New("public key is not consistent with private key")
+				}
+			default:
+				return nil, errors.New("failed to verify consistency of public key with private key")
+			}
 		}
 	}
 

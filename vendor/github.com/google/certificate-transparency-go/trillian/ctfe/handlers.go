@@ -23,24 +23,25 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/google/certificate-transparency-go/asn1"
 	"github.com/google/certificate-transparency-go/tls"
 	"github.com/google/certificate-transparency-go/trillian/util"
 	"github.com/google/certificate-transparency-go/x509"
+	"github.com/google/certificate-transparency-go/x509util"
 	"github.com/google/trillian"
 	"github.com/google/trillian/monitoring"
 	"github.com/google/trillian/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
+	"k8s.io/klog/v2"
 
 	ct "github.com/google/certificate-transparency-go"
 )
@@ -165,9 +166,9 @@ func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		latency := a.Info.TimeSource.Now().Sub(startTime).Seconds()
 		rspLatency.Observe(latency, label0, label1, strconv.Itoa(statusCode))
 	}()
-	glog.V(2).Infof("%s: request %v %q => %s", a.Info.LogPrefix, r.Method, r.URL, a.Name)
+	klog.V(2).Infof("%s: request %v %q => %s", a.Info.LogPrefix, r.Method, r.URL, a.Name)
 	if r.Method != a.Method {
-		glog.Warningf("%s: %s wrong HTTP method: %v", a.Info.LogPrefix, a.Name, r.Method)
+		klog.Warningf("%s: %s wrong HTTP method: %v", a.Info.LogPrefix, a.Name, r.Method)
 		a.Info.SendHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed: %s", r.Method))
 		a.Info.RequestLog.Status(logCtx, http.StatusMethodNotAllowed)
 		return
@@ -191,17 +192,17 @@ func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err error
 	statusCode, err = a.Handler(ctx, a.Info, w, r)
 	a.Info.RequestLog.Status(ctx, statusCode)
-	glog.V(2).Infof("%s: %s <= st=%d", a.Info.LogPrefix, a.Name, statusCode)
+	klog.V(2).Infof("%s: %s <= st=%d", a.Info.LogPrefix, a.Name, statusCode)
 	rspsCounter.Inc(label0, label1, strconv.Itoa(statusCode))
 	if err != nil {
-		glog.Warningf("%s: %s handler error: %v", a.Info.LogPrefix, a.Name, err)
+		klog.Warningf("%s: %s handler error: %v", a.Info.LogPrefix, a.Name, err)
 		a.Info.SendHTTPError(w, statusCode, err)
 		return
 	}
 
 	// Additional check, for consistency the handler must return an error for non-200 st
 	if statusCode != http.StatusOK {
-		glog.Warningf("%s: %s handler non 200 without error: %d %v", a.Info.LogPrefix, a.Name, statusCode, err)
+		klog.Warningf("%s: %s handler non 200 without error: %d %v", a.Info.LogPrefix, a.Name, statusCode, err)
 		a.Info.SendHTTPError(w, http.StatusInternalServerError, fmt.Errorf("http handler misbehaved, st: %d", statusCode))
 		return
 	}
@@ -210,7 +211,7 @@ func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // CertValidationOpts contains various parameters for certificate chain validation
 type CertValidationOpts struct {
 	// trustedRoots is a pool of certificates that defines the roots the CT log will accept
-	trustedRoots *PEMCertPool
+	trustedRoots *x509util.PEMCertPool
 	// currentTime is the time used for checking a certificate's validity period
 	// against. If it's zero then time.Now() is used. Only for testing.
 	currentTime time.Time
@@ -234,7 +235,7 @@ type CertValidationOpts struct {
 }
 
 // NewCertValidationOpts builds validation options based on parameters.
-func NewCertValidationOpts(trustedRoots *PEMCertPool, currentTime time.Time, rejectExpired bool, rejectUnexpired bool, notAfterStart *time.Time, notAfterLimit *time.Time, acceptOnlyCA bool, extKeyUsages []x509.ExtKeyUsage) CertValidationOpts {
+func NewCertValidationOpts(trustedRoots *x509util.PEMCertPool, currentTime time.Time, rejectExpired bool, rejectUnexpired bool, notAfterStart *time.Time, notAfterLimit *time.Time, acceptOnlyCA bool, extKeyUsages []x509.ExtKeyUsage) CertValidationOpts {
 	var vOpts CertValidationOpts
 	vOpts.trustedRoots = trustedRoots
 	vOpts.currentTime = currentTime
@@ -341,8 +342,8 @@ func (li *logInfo) Handlers(prefix string) PathHandlers {
 		prefix + ct.GetRootsPath:          AppHandler{Info: li, Handler: getRoots, Name: GetRootsName, Method: http.MethodGet},
 		prefix + ct.GetEntryAndProofPath:  AppHandler{Info: li, Handler: getEntryAndProof, Name: GetEntryAndProofName, Method: http.MethodGet},
 	}
-	// Remove endpoints not provided by mirrors.
-	if li.instanceOpts.Validated.Config.IsMirror {
+	// Remove endpoints not provided by readonly logs and mirrors.
+	if li.instanceOpts.Validated.Config.IsReadonly || li.instanceOpts.Validated.Config.IsMirror {
 		delete(ph, prefix+ct.AddChainPath)
 		delete(ph, prefix+ct.AddPreChainPath)
 	}
@@ -374,21 +375,21 @@ func (li *logInfo) getSTH(ctx context.Context) (*ct.SignedTreeHead, error) {
 
 // ParseBodyAsJSONChain tries to extract cert-chain out of request.
 func ParseBodyAsJSONChain(r *http.Request) (ct.AddChainRequest, error) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		glog.V(1).Infof("Failed to read request body: %v", err)
+		klog.V(1).Infof("Failed to read request body: %v", err)
 		return ct.AddChainRequest{}, err
 	}
 
 	var req ct.AddChainRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		glog.V(1).Infof("Failed to parse request body: %v", err)
+		klog.V(1).Infof("Failed to parse request body: %v", err)
 		return ct.AddChainRequest{}, err
 	}
 
 	// The cert chain is not allowed to be empty. We'll defer other validation for later
 	if len(req.Chain) == 0 {
-		glog.V(1).Infof("Request chain is empty: %s", body)
+		klog.V(1).Infof("Request chain is empty: %q", body)
 		return ct.AddChainRequest{}, errors.New("cert chain was empty")
 	}
 
@@ -472,9 +473,9 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 		}
 	}
 
-	glog.V(2).Infof("%s: %s => grpc.QueueLeaves", li.LogPrefix, method)
+	klog.V(2).Infof("%s: %s => grpc.QueueLeaves", li.LogPrefix, method)
 	rsp, err := li.rpcClient.QueueLeaf(ctx, &req)
-	glog.V(2).Infof("%s: %s <= grpc.QueueLeaves err=%v", li.LogPrefix, method, err)
+	klog.V(2).Infof("%s: %s <= grpc.QueueLeaves err=%v", li.LogPrefix, method, err)
 	if err != nil {
 		return li.toHTTPStatus(err), fmt.Errorf("backend QueueLeaves request failed: %s", err)
 	}
@@ -510,7 +511,7 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 		// reason is logged and http status is already set
 		return http.StatusInternalServerError, fmt.Errorf("failed to write response: %s", err)
 	}
-	glog.V(3).Infof("%s: %s <= SCT", li.LogPrefix, method)
+	klog.V(3).Infof("%s: %s <= SCT", li.LogPrefix, method)
 	if sct.Timestamp == timeMillis {
 		lastSCTTimestamp.Set(float64(sct.Timestamp), strconv.FormatInt(li.logID, 10))
 	}
@@ -587,9 +588,9 @@ func getSTHConsistency(ctx context.Context, li *logInfo, w http.ResponseWriter, 
 			ChargeTo:       li.chargeUser(r),
 		}
 
-		glog.V(2).Infof("%s: GetSTHConsistency(%d, %d) => grpc.GetConsistencyProof %+v", li.LogPrefix, first, second, prototext.Format(&req))
+		klog.V(2).Infof("%s: GetSTHConsistency(%d, %d) => grpc.GetConsistencyProof %+v", li.LogPrefix, first, second, prototext.Format(&req))
 		rsp, err := li.rpcClient.GetConsistencyProof(ctx, &req)
-		glog.V(2).Infof("%s: GetSTHConsistency <= grpc.GetConsistencyProof err=%v", li.LogPrefix, err)
+		klog.V(2).Infof("%s: GetSTHConsistency <= grpc.GetConsistencyProof err=%v", li.LogPrefix, err)
 		if err != nil {
 			return li.toHTTPStatus(err), fmt.Errorf("backend GetConsistencyProof request failed: %s", err)
 		}
@@ -614,7 +615,7 @@ func getSTHConsistency(ctx context.Context, li *logInfo, w http.ResponseWriter, 
 			jsonRsp.Consistency = emptyProof
 		}
 	} else {
-		glog.V(2).Infof("%s: GetSTHConsistency(%d, %d) starts from 0 so return empty proof", li.LogPrefix, first, second)
+		klog.V(2).Infof("%s: GetSTHConsistency(%d, %d) starts from 0 so return empty proof", li.LogPrefix, first, second)
 		jsonRsp.Consistency = emptyProof
 	}
 
@@ -701,7 +702,7 @@ func getProofByHash(ctx context.Context, li *logInfo, w http.ResponseWriter, r *
 	w.Header().Set(contentTypeHeader, contentTypeJSON)
 	jsonData, err := json.Marshal(&proofRsp)
 	if err != nil {
-		glog.Warningf("%s: Failed to marshal get-proof-by-hash resp: %v", li.LogPrefix, proofRsp)
+		klog.Warningf("%s: Failed to marshal get-proof-by-hash resp: %v", li.LogPrefix, proofRsp)
 		return http.StatusInternalServerError, fmt.Errorf("failed to marshal get-proof-by-hash resp: %s", err)
 	}
 
@@ -795,7 +796,7 @@ func getRoots(_ context.Context, li *logInfo, w http.ResponseWriter, _ *http.Req
 	enc := json.NewEncoder(w)
 	err := enc.Encode(jsonMap)
 	if err != nil {
-		glog.Warningf("%s: get_roots failed: %v", li.LogPrefix, err)
+		klog.Warningf("%s: get_roots failed: %v", li.LogPrefix, err)
 		return http.StatusInternalServerError, fmt.Errorf("get-roots failed with: %s", err)
 	}
 
@@ -890,9 +891,9 @@ func verifyAddChain(li *logInfo, req ct.AddChainRequest, expectingPrecert bool) 
 	// The type of the leaf must match the one the handler expects
 	if isPrecert != expectingPrecert {
 		if expectingPrecert {
-			glog.Warningf("%s: Cert (or precert with invalid CT ext) submitted as precert chain: %x", li.LogPrefix, req.Chain)
+			klog.Warningf("%s: Cert (or precert with invalid CT ext) submitted as precert chain: %q", li.LogPrefix, req.Chain)
 		} else {
-			glog.Warningf("%s: Precert (or cert with invalid CT ext) submitted as cert chain: %x", li.LogPrefix, req.Chain)
+			klog.Warningf("%s: Precert (or cert with invalid CT ext) submitted as cert chain: %q", li.LogPrefix, req.Chain)
 		}
 		return nil, fmt.Errorf("cert / precert mismatch: %T", expectingPrecert)
 	}
@@ -1053,14 +1054,14 @@ func marshalGetEntriesResponse(li *logInfo, leaves []*trillian.LogLeaf) (ct.GetE
 		// or data storage that should be investigated.
 		var treeLeaf ct.MerkleTreeLeaf
 		if rest, err := tls.Unmarshal(leaf.LeafValue, &treeLeaf); err != nil {
-			glog.Errorf("%s: Failed to deserialize Merkle leaf from backend: %d", li.LogPrefix, leaf.LeafIndex)
+			klog.Errorf("%s: Failed to deserialize Merkle leaf from backend: %d", li.LogPrefix, leaf.LeafIndex)
 		} else if len(rest) > 0 {
-			glog.Errorf("%s: Trailing data after Merkle leaf from backend: %d", li.LogPrefix, leaf.LeafIndex)
+			klog.Errorf("%s: Trailing data after Merkle leaf from backend: %d", li.LogPrefix, leaf.LeafIndex)
 		}
 
 		extraData := leaf.ExtraData
 		if len(extraData) == 0 {
-			glog.Errorf("%s: Missing ExtraData for leaf %d", li.LogPrefix, leaf.LeafIndex)
+			klog.Errorf("%s: Missing ExtraData for leaf %d", li.LogPrefix, leaf.LeafIndex)
 		}
 		jsonRsp.Entries = append(jsonRsp.Entries, ct.LeafEntry{
 			LeafInput: leaf.LeafValue,
