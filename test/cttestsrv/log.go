@@ -109,15 +109,13 @@ func initSTH(tt *testTree) error {
 	emptyRootHash := sha256.Sum256(nil)
 
 	// init the new tree by signing a STH for the empty root
-	slr := types.LogRoot{
-		Version: cttls.Enum(trillian.LogRootFormat_LOG_ROOT_FORMAT_V1),
-		V1: &types.LogRootV1{
-			TreeSize:       0,
-			RootHash:       emptyRootHash[:],
-			TimestampNanos: uint64(timeSource.Now().UnixNano()),
-		},
+	root := types.LogRootV1{
+		TreeSize:       0,
+		RootHash:       emptyRootHash[:],
+		TimestampNanos: uint64(timeSource.Now().UnixNano()),
 	}
-	slrBytes, err := cttls.Marshal(slr)
+
+	slrBytes, err := root.MarshalBinary()
 	if err != nil {
 		return err
 	}
